@@ -1,0 +1,222 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+
+import '../../core/demo/hostel_data.dart';
+import '../../core/theme/brightness_provider.dart';
+import '../../core/theme/squircle_button.dart';
+import '../../core/theme/surface_card.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/widgets/hostel_glyph.dart';
+import '../../core/widgets/status_pill.dart';
+import '../../core/widgets/wavy_sheet.dart';
+
+/// My bookings + history (FR10). Tap a booking for its allocation slip; paid
+/// bookings can be cancelled.
+class ReservationsPage extends ConsumerWidget {
+  const ReservationsPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(brightnessProvider);
+    final reservations = ref.watch(reservationsProvider);
+    final active = reservations.where((r) => r.status == RoostStatus.paid).toList();
+    final paidTotal = active.fold(0, (s, r) => s + r.fee);
+
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('My bookings', style: Theme.of(context).textTheme.headlineLarge),
+                const SizedBox(height: 2),
+                Text('Your reservations and history', style: TextStyle(fontSize: 14, color: RoostColors.textTertiary)),
+                const SizedBox(height: RoostSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(child: _Stat(label: 'Active', value: '${active.length}')),
+                    const SizedBox(width: RoostSpacing.md),
+                    Expanded(child: _Stat(label: 'Paid this session', value: '₦${_short(paidTotal)}')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: RoostSpacing.lg),
+          Expanded(
+            child: reservations.isEmpty
+                ? _empty(context)
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, 0, RoostSpacing.xl, RoostSpacing.xxl),
+                    itemCount: reservations.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: RoostSpacing.md),
+                    itemBuilder: (ctx, i) => _ReservationCard(
+                      reservation: reservations[i],
+                      onTap: () => _showSheet(ctx, ref, reservations[i]),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _short(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k' : '$n';
+
+  Widget _empty(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(PhosphorIcons.ticket(), size: 44, color: RoostColors.textTertiary),
+            const SizedBox(height: RoostSpacing.md),
+            Text('No bookings yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: RoostColors.textSecondary)),
+            const SizedBox(height: 4),
+            Text('Reserve a bed and it shows up here.', style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
+            const SizedBox(height: RoostSpacing.lg),
+            SizedBox(
+              width: 200,
+              child: RoostButton(label: 'Browse hostels', onPressed: () => context.go('/home?tab=0')),
+            ),
+          ],
+        ),
+      );
+
+  Future<void> _showSheet(BuildContext context, WidgetRef ref, Reservation r) async {
+    final h = HostelData.byId(r.hostelId);
+    final paid = r.status == RoostStatus.paid;
+    await showRoostWavySheet(
+      context: context,
+      headerGradient: paid ? RoostGradients.accentHeader : RoostGradients.graphiteHeader,
+      headerForeground: paid ? RoostColors.onAccent : RoostColors.textPrimary,
+      headerHeight: 150,
+      header: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(paid ? PhosphorIcons.sealCheck(PhosphorIconsStyle.fill) : PhosphorIcons.clockCounterClockwise(),
+              size: 34, color: paid ? RoostColors.onAccent : RoostColors.textPrimary),
+          const SizedBox(height: RoostSpacing.sm),
+          Text(h.name,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: paid ? RoostColors.onAccent : RoostColors.textPrimary)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xxl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: StatusPill(r.status)),
+            const SizedBox(height: RoostSpacing.lg),
+            _row('Room', r.roomName),
+            _row('Bed', 'Bed ${r.bed}'),
+            _row('Reference', r.reference, mono: true),
+            _row('Remita RRR', r.rrr, mono: true),
+            _row('Amount', r.feeFull),
+            _row('Date', r.date),
+            const SizedBox(height: RoostSpacing.xl),
+            if (paid)
+              RoostButton(
+                label: 'Cancel reservation',
+                variant: RoostButtonVariant.destructive,
+                onPressed: () {
+                  ref.read(reservationsProvider.notifier).cancel(r.reference);
+                  Navigator.of(context).pop();
+                },
+              )
+            else
+              RoostButton(
+                label: 'Close',
+                variant: RoostButtonVariant.secondary,
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, String value, {bool mono = false}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            Text(label, style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
+            const Spacer(),
+            Flexible(
+              child: Text(value,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 13.5, fontWeight: FontWeight.w600, color: RoostColors.textPrimary,
+                    fontFamily: mono ? 'monospace' : 'Montserrat',
+                  )),
+            ),
+          ],
+        ),
+      );
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.label, required this.value});
+  final String label, value;
+  @override
+  Widget build(BuildContext context) {
+    return RoostSurfaceCard(
+      floating: true,
+      padding: const EdgeInsets.all(RoostSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: RoostColors.textPrimary, letterSpacing: -0.5)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 12, color: RoostColors.textTertiary, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReservationCard extends StatelessWidget {
+  const _ReservationCard({required this.reservation, required this.onTap});
+  final Reservation reservation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = HostelData.byId(reservation.hostelId);
+    return RoostSurfaceCard(
+      floating: true,
+      padding: const EdgeInsets.all(RoostSpacing.lg),
+      onTap: onTap,
+      child: Row(
+        children: [
+          HostelGlyph(code: h.code, size: 44, accent: reservation.status == RoostStatus.paid),
+          const SizedBox(width: RoostSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(h.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+                const SizedBox(height: 2),
+                Text('${reservation.roomName}  ·  Bed ${reservation.bed}',
+                    style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              StatusPill(reservation.status),
+              const SizedBox(height: 6),
+              Text(reservation.date, style: TextStyle(fontSize: 11, color: RoostColors.textTertiary)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

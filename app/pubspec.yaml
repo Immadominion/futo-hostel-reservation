@@ -1,0 +1,58 @@
+name: futo_hostel
+description: "Roost — FUTO Hostel Reservation (SOE-510 Group 2)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # state + routing (kept minimal — two providers + flat routes)
+  flutter_riverpod: ^3.3.1
+  go_router: ^17.2.1
+
+  # ui
+  figma_squircle: ^0.6.3   # smooth squircle corners
+  phosphor_flutter: ^2.1.0 # icon set (patched locally — see dependency_overrides)
+
+  # device features used by the brief
+  local_auth: ^2.3.0       # Face ID / fingerprint unlock
+  url_launcher: ^6.3.1     # "View on map" -> Google Maps
+
+  intl: ^0.20.2
+  cupertino_icons: ^1.0.8
+
+# phosphor_flutter 2.1.0 (the latest published version) declares
+# `class PhosphorIconData extends IconData`, but current Flutter marks IconData
+# as a `final class` that can't be extended outside its library, so the build
+# fails. Until an upstream fix is published, use a locally patched copy that
+# emits plain `IconData` constants instead. See vendor/phosphor_flutter.
+dependency_overrides:
+  phosphor_flutter:
+    path: vendor/phosphor_flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/hostels/
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Montserrat-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Montserrat-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Montserrat-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Montserrat-ExtraBold.ttf
+          weight: 800

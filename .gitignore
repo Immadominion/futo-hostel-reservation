@@ -1,0 +1,34 @@
+# ─────────── Secrets / local environment ───────────
+.env
+.env.*
+!.env.example
+
+# ─────────── Build outputs & deploy bundles (not source) ───────────
+# Compiled release APK (48 MB) — distribute via a GitHub Release, not the repo.
+*.apk
+# Generated Vercel deploy bundle (built landing + admin + Flutter web).
+roost-futo-hostel/
+
+# ─────────── Flutter / Dart (app/) ───────────
+app/build/
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+app/.pub-cache/
+app/.pub/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+app.*.symbols
+app.*.map.json
+
+# ─────────── IDE / editor ───────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# ─────────── OS cruft ───────────
+.DS_Store
+Thumbs.db
+*.swp
+*.log

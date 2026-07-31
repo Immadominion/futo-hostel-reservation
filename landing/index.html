@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roost — FUTO Hostel Reservation</title>
+  <meta name="description" content="Browse every FUTO hostel, check real-time availability, pay, and get your room allocation — from your phone." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ───────────────── Nav ───────────────── -->
+  <header class="nav" id="nav">
+    <div class="container nav-inner">
+      <a class="wordmark" href="#top">Roost<span>.</span></a>
+      <nav class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#hostels">Hostels</a>
+        <a href="#features">Features</a>
+      </nav>
+      <div class="nav-cta">
+        <button class="btn btn-ghost" data-action="watch">Watch video</button>
+        <button class="btn btn-primary" data-action="live">View live</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ───────────────── Hero ───────────────── -->
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <span class="eyebrow">FUTO Hostel Reservation</span>
+          <h1>Your bed space, <span class="grad">booked from your phone.</span></h1>
+          <p class="lead">Browse every FUTO hostel — A to E, plus NDDC, TETFund and PG — check
+            real-time availability, pay, and get your room allocation. No queues, no paperwork.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary btn-lg" data-action="live">
+              <svg viewBox="0 0 24 24" class="ic"><path d="M8 5v14l11-7z"/></svg>
+              View live
+            </button>
+            <button class="btn btn-secondary btn-lg" data-action="watch">
+              <svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M10 9l5 3-5 3z" fill="currentColor" stroke="none"/></svg>
+              Watch video
+            </button>
+          </div>
+          <div class="hero-meta">
+            <span><b>8</b> hostels</span><i></i>
+            <span><b>600+</b> beds</span><i></i>
+            <span>Pay with <b>Remita</b></span>
+          </div>
+        </div>
+
+        <!-- live app preview (CSS mock of the Browse screen) -->
+        <div class="hero-phone reveal">
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="mini-head">
+                <p class="mini-ey">Welcome back</p>
+                <h3 class="mini-title">Find your space</h3>
+                <div class="mini-search">
+                  <svg viewBox="0 0 24 24" class="ic"><path fill="none" stroke="currentColor" stroke-width="2" d="M10 4a6 6 0 100 12 6 6 0 000-12zM20 20l-4-4"/></svg>
+                  <span>Search hostels</span>
+                </div>
+                <div class="mini-chips">
+                  <span class="mini-chip on">All</span>
+                  <span class="mini-chip">Male</span>
+                  <span class="mini-chip">Female</span>
+                  <span class="mini-chip">Mixed</span>
+                </div>
+              </div>
+              <div class="mini-card">
+                <div class="mini-cover" style="background:linear-gradient(135deg,#134E4A,#0D9488)">
+                  <span class="mini-funder">NDDC</span>
+                  <span class="mini-pill pos">● AVAILABLE</span>
+                  <svg viewBox="0 0 24 24" class="mini-bld"><path fill="currentColor" d="M3 21V7l6-4 6 4v14H3zm12 0V10h6v11h-6zM6 11h2v2H6v-2zm0 4h2v2H6v-2zm4-4h2v2h-2v-2zm0 4h2v2h-2v-2z"/></svg>
+                </div>
+                <div class="mini-body">
+                  <div><div class="mini-name">NDDC Hostel</div><div class="mini-sub">Mixed · 3–4 / room</div></div>
+                  <div class="mini-price">₦62,500</div>
+                </div>
+              </div>
+              <div class="mini-card">
+                <div class="mini-cover" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6)">
+                  <span class="mini-funder">TETFund</span>
+                  <span class="mini-pill pos">● AVAILABLE</span>
+                  <svg viewBox="0 0 24 24" class="mini-bld"><path fill="currentColor" d="M3 21V7l6-4 6 4v14H3zm12 0V10h6v11h-6zM6 11h2v2H6v-2zm0 4h2v2H6v-2zm4-4h2v2h-2v-2zm0 4h2v2h-2v-2z"/></svg>
+                </div>
+                <div class="mini-body">
+                  <div><div class="mini-name">TETFund Hostel</div><div class="mini-sub">Mixed · 4 / room</div></div>
+                  <div class="mini-price">₦90,000</div>
+                </div>
+              </div>
+              <div class="mini-nav">
+                <span class="on"><svg viewBox="0 0 24 24" class="ic"><path fill="currentColor" d="M3 21V7l6-4 6 4v14H3zm12 0V10h6v11h-6z"/></svg>Browse</span>
+                <span><svg viewBox="0 0 24 24" class="ic"><path fill="none" stroke="currentColor" stroke-width="2" d="M3 8h18v8H3z"/></svg>Bookings</span>
+                <span><svg viewBox="0 0 24 24" class="ic"><circle cx="12" cy="8" r="4" fill="currentColor"/><path fill="currentColor" d="M4 20a8 8 0 0116 0z"/></svg>Profile</span>
+              </div>
+            </div>
+          </div>
+          <div class="phone-glow"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── Stat strip ───────────────── -->
+    <section class="strip">
+      <div class="container strip-inner">
+        <div class="strip-item"><b>8</b><span>FUTO hostels</span></div>
+        <div class="strip-item"><b>A–E</b><span>+ NDDC · TETFund · PG</span></div>
+        <div class="strip-item"><b>₦42k–₦90k</b><span>per session</span></div>
+        <div class="strip-item"><b>Remita</b><span>secure payment</span></div>
+      </div>
+    </section>
+
+    <!-- ───────────────── How it works ───────────────── -->
+    <section id="how" class="section">
+      <div class="container">
+        <h2 class="section-title reveal">From login to allocation in four taps</h2>
+        <p class="section-sub reveal">Roost mirrors the real FUTO hostel process — just faster, and on your phone.</p>
+        <div class="steps">
+          <div class="step reveal">
+            <div class="step-no">1</div>
+            <h3>Sign in</h3>
+            <p>Use your reg number or school email. Unlock with Face&nbsp;ID or fingerprint next time.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-no">2</div>
+            <h3>Browse &amp; pick</h3>
+            <p>See every block with live availability, gender, room size and price. Filter to what fits you.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-no">3</div>
+            <h3>Reserve &amp; pay</h3>
+            <p>Choose a room and bed, then pay the session fee. A Remita RRR is generated instantly.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-no">4</div>
+            <h3>Get your slip</h3>
+            <p>Receive your allocation — hostel, room and bed — and an e-receipt to check in.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── Hostels ───────────────── -->
+    <section id="hostels" class="section section-alt">
+      <div class="container">
+        <h2 class="section-title reveal">Every FUTO hostel, in one place</h2>
+        <p class="section-sub reveal">Real-time availability across all eight blocks. Tap any to see it on the map.</p>
+        <div class="hostel-grid" id="hostelGrid"></div>
+
+        <div class="map-card reveal">
+          <div class="map-head">
+            <div>
+              <h3>Find them on campus</h3>
+              <p>FUTO, Ihiagwa, Owerri — every hostel is a short walk from the lecture halls.</p>
+            </div>
+            <a class="btn btn-secondary" target="_blank" rel="noopener"
+               href="https://www.google.com/maps/search/?api=1&query=Federal+University+of+Technology+Owerri+hostels">Open in Google Maps</a>
+          </div>
+          <iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+            src="https://www.google.com/maps?q=Federal%20University%20of%20Technology%20Owerri&z=15&output=embed"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── Features ───────────────── -->
+    <section id="features" class="section">
+      <div class="container">
+        <h2 class="section-title reveal">Built for the way FUTO students live</h2>
+        <p class="section-sub reveal">Small touches that make booking a bed feel effortless.</p>
+        <div class="feature-grid">
+          <div class="feature reveal"><div class="f-ic">🔐</div><h3>Biometric login</h3><p>Face ID or fingerprint after your first sign-in. No password to remember.</p></div>
+          <div class="feature reveal"><div class="f-ic">⚡</div><h3>Real-time availability</h3><p>Beds update the moment they're taken — no booking a room that's already full.</p></div>
+          <div class="feature reveal"><div class="f-ic">🧾</div><h3>Instant e-receipt</h3><p>A Remita RRR and allocation slip the second your payment confirms.</p></div>
+          <div class="feature reveal"><div class="f-ic">🌓</div><h3>Light &amp; dark</h3><p>A clean, modern interface that adapts to day or night with one tap.</p></div>
+          <div class="feature reveal"><div class="f-ic">🛏️</div><h3>Pick your bed</h3><p>Choose the exact room and bed space, not just a hostel block.</p></div>
+          <div class="feature reveal"><div class="f-ic">🎓</div><h3>Made for FUTO</h3><p>All eight blocks, the real fees, and the real first-come-first-serve flow.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── CTA band ───────────────── -->
+    <section class="cta-band">
+      <div class="container cta-inner reveal">
+        <h2>Ready to claim your space?</h2>
+        <p>Watch the 60-second walkthrough, or open the live app right now.</p>
+        <div class="hero-actions center">
+          <button class="btn btn-onband btn-lg" data-action="live">View live</button>
+          <button class="btn btn-ghostband btn-lg" data-action="watch">Watch video</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ───────────────── Footer ───────────────── -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>
+        <a class="wordmark" href="#top">Roost<span>.</span></a>
+        <p class="footer-tag">FUTO Hostel Reservation</p>
+      </div>
+      <div class="footer-meta">
+        <span>SOE-510 · Mobile App Development · Group 2</span>
+        <span>Federal University of Technology, Owerri</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ───────────────── Video modal ───────────────── -->
+  <div class="modal" id="videoModal" hidden>
+    <div class="modal-scrim" data-action="close-modal"></div>
+    <div class="modal-card">
+      <button class="modal-close" data-action="close-modal" aria-label="Close">×</button>
+      <div class="modal-video" id="modalVideo"></div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

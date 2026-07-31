@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roost Admin — FUTO Hostel Reservation</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-tile">R</div>
+        <div class="brand-text">
+          <span class="brand-name">Roost</span>
+          <span class="brand-tag">Admin</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-page="overview">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span>Overview</span>
+        </button>
+        <button class="nav-item" data-page="hostels">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+          <span>Hostels &amp; Rooms</span>
+        </button>
+        <button class="nav-item" data-page="reservations">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+          <span>Reservations</span>
+        </button>
+        <button class="nav-item" data-page="allocation">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11l-3 3-2-2"/></svg>
+          <span>Allocation</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="chip">FUTO Student Affairs</span>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <!-- OVERVIEW -->
+      <section class="page active" id="page-overview">
+        <header class="page-header">
+          <div>
+            <h1 class="page-title">Overview</h1>
+            <p class="page-subtitle">2025/2026 hostel allocation session at a glance.</p>
+          </div>
+          <button class="btn btn-primary" data-goto="reservations">View reservations</button>
+        </header>
+
+        <div class="stat-grid" id="statGrid"></div>
+
+        <div class="card">
+          <h2 class="card-title">Occupancy by hostel</h2>
+          <div class="occ-list" id="occList"></div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Recent reservations</h2>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Student</th><th>Hostel</th><th>Room · Bed</th><th>Amount</th><th>Status</th><th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="recentBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- HOSTELS & ROOMS -->
+      <section class="page" id="page-hostels">
+        <header class="page-header">
+          <div>
+            <h1 class="page-title">Hostels &amp; Rooms</h1>
+            <p class="page-subtitle">Manage hostel blocks, room types and pricing.</p>
+          </div>
+          <button class="btn btn-primary" id="addHostelBtn">+ Add hostel</button>
+        </header>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Hostel</th><th>Gender</th><th>Rooms</th><th>Beds</th><th>Price</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="hostelBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- RESERVATIONS -->
+      <section class="page" id="page-reservations">
+        <header class="page-header">
+          <div>
+            <h1 class="page-title">Reservations</h1>
+            <p class="page-subtitle">All bed reservations and payment status.</p>
+          </div>
+        </header>
+
+        <div class="filter-row" id="filterRow">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="PAID">Paid</button>
+          <button class="filter-btn" data-filter="PENDING">Pending</button>
+          <button class="filter-btn" data-filter="CANCELLED">Cancelled</button>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Reference</th><th>Student</th><th>Hostel</th><th>Room · Bed</th><th>RRR</th><th>Amount</th><th>Status</th><th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="resBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ALLOCATION -->
+      <section class="page" id="page-allocation">
+        <header class="page-header">
+          <div>
+            <h1 class="page-title">Allocation</h1>
+            <p class="page-subtitle">First-come-first-serve, with 100-level &amp; final-year priority.</p>
+          </div>
+        </header>
+
+        <div class="note">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+          <span>Requests are queued first-come-first-serve. Students in <strong>100 level</strong> and <strong>final year</strong> are flagged for priority. Allocate a bed manually or reassign a hostel below.</span>
+        </div>
+
+        <div class="alloc-grid">
+          <div class="card">
+            <h2 class="card-title">Pending requests <span class="count-badge" id="pendingCount">0</span></h2>
+            <div class="queue" id="queueList"></div>
+          </div>
+          <div class="card">
+            <h2 class="card-title">Allocated <span class="count-badge" id="allocatedCount">0</span></h2>
+            <div class="queue" id="allocatedList"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ADD HOSTEL MODAL -->
+  <div class="modal-scrim" id="modalScrim" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 id="modalTitle">Add hostel</h2>
+        <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="hostelForm" class="modal-body">
+        <label class="field">
+          <span>Name</span>
+          <input type="text" name="name" placeholder="e.g. Hostel F" required />
+        </label>
+        <label class="field">
+          <span>Gender</span>
+          <select name="gender">
+            <option>Male</option>
+            <option>Female</option>
+            <option>Mixed</option>
+            <option>Postgraduate</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Funder</span>
+          <input type="text" name="funder" placeholder="e.g. School / TETFund / NDDC" required />
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Price (₦)</span>
+            <input type="number" name="price" placeholder="42000" min="0" required />
+          </label>
+          <label class="field">
+            <span>Capacity (beds)</span>
+            <input type="number" name="capacity" placeholder="48" min="1" required />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="modalCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save hostel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
