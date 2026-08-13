@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../../core/api/roost_api.dart';
+import '../../core/config/app_config.dart';
 import '../../core/demo/hostel_data.dart';
 import '../../core/theme/brightness_provider.dart';
 import '../../core/theme/squircle_button.dart';
@@ -29,18 +31,59 @@ class _ReservePageState extends ConsumerState<ReservePage> {
   bool _paying = false;
 
   int _openBeds(RoomType r) => r.bedsAvailable == 0 ? 0 : (r.capacity <= 4 ? 2 : 3);
-  bool _isTaken(RoomType r, int bed) => bed <= r.capacity - _openBeds(r);
+  // Live mode: the server tells us exactly which beds are taken. Demo mode
+  // falls back to a stable heuristic.
+  bool _isTaken(RoomType r, int bed) => r.occupiedBeds.isNotEmpty
+      ? r.occupiedBeds.contains(bed)
+      : bed <= r.capacity - _openBeds(r);
 
   Future<void> _pay(Hostel h, RoomType room) async {
     setState(() => _paying = true);
     HapticFeedback.mediumImpact();
-    await Future.delayed(const Duration(milliseconds: 1600)); // mock Remita gateway
+    try {
+      final res = await _reserveAndPay(h, room);
+      if (!mounted) return;
+      setState(() => _paying = false);
+      await _showReceipt(h, res);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _paying = false);
+      _snack(e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _paying = false);
+      _snack('Payment could not be completed. Please try again.');
+    }
+  }
+
+  /// Reserve → pay → confirm. Demo mode fakes it in memory; live mode holds the
+  /// bed (POST /reservations), confirms via the payment simulate endpoint, then
+  /// reads back the paid reservation for the receipt.
+  Future<Reservation> _reserveAndPay(Hostel h, RoomType room) async {
+    final bed = _bed!;
+    if (AppConfig.useDemoData) {
+      await Future.delayed(const Duration(milliseconds: 1600)); // mock Remita gateway
+      return ref
+          .read(reservationsProvider.notifier)
+          .reserveDemo(hostel: h, room: room, bed: bed, fee: h.price);
+    }
+    final api = ref.read(roostApiProvider);
+    final created = await api.createReservation(hostelId: h.id, roomId: room.id, bed: bed);
+    await api.simulatePayment(created.rrr, success: true);
+    Reservation res;
+    try {
+      res = await api.reservation(created.id); // paid, with final reference/RRR
+    } catch (_) {
+      res = created.copyWith(status: RoostStatus.paid);
+    }
+    if (room.bedsAvailable > 0) room.bedsAvailable -= 1; // reflect availability locally
+    ref.read(reservationsProvider.notifier).add(res);
+    return res;
+  }
+
+  void _snack(String msg) {
     if (!mounted) return;
-    final res = ref.read(reservationsProvider.notifier).reserve(
-          hostel: h, room: room, bed: _bed!, fee: h.price,
-        );
-    setState(() => _paying = false);
-    await _showReceipt(h, res);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Future<void> _showReceipt(Hostel h, Reservation res) async {

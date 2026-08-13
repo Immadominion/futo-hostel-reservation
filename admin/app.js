@@ -250,6 +250,7 @@ function renderAllocation() {
 }
 
 function allocate(index) {
+  if (window.RoostAdmin && RoostAdmin.isLive()) { RoostAdmin.allocateLive(index); return; }
   const sel = document.getElementById('sel-' + index);
   const assigned = sel ? sel.value : QUEUE[index].requested;
   const student = QUEUE.splice(index, 1)[0];
@@ -337,4 +338,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderHostels();
     renderOverview();
   });
+
+  // Kick off live backend integration (no-op in demo mode). Falls back to the
+  // seed data already rendered above if the API is unreachable.
+  if (window.RoostAdmin) RoostAdmin.boot();
 });

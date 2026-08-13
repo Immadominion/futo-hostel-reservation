@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../core/demo/hostel_data.dart';
+import '../../core/session/session_controller.dart';
 import '../../core/theme/brightness_provider.dart';
 import '../../core/theme/squircle_button.dart';
 import '../../core/theme/surface_card.dart';
@@ -21,6 +22,7 @@ class ProfilePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(brightnessProvider);
+    final student = ref.watch(sessionProvider) ?? Student.demo();
     final reservations = ref.watch(reservationsProvider);
     final activeList = reservations.where((r) => r.status == RoostStatus.paid).toList();
     final active = activeList.isEmpty ? null : activeList.first;
@@ -59,15 +61,15 @@ class ProfilePage extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    RoostAvatar(label: HostelData.studentName, size: 60, accent: true),
+                    RoostAvatar(label: student.displayName, size: 60, accent: true),
                     const SizedBox(width: RoostSpacing.lg),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(HostelData.studentName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                          Text(student.displayName, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
                           const SizedBox(height: 2),
-                          Text(HostelData.studentRegNo, style: TextStyle(fontSize: 14, color: RoostColors.textTertiary)),
+                          Text(student.displayRegNo, style: TextStyle(fontSize: 14, color: RoostColors.textTertiary)),
                         ],
                       ),
                     ),
@@ -76,9 +78,9 @@ class ProfilePage extends ConsumerWidget {
                 const SizedBox(height: RoostSpacing.lg),
                 Divider(height: 1, color: RoostColors.borderSubtle),
                 const SizedBox(height: RoostSpacing.md),
-                _kv('Department', HostelData.studentDept),
-                _kv('Level', HostelData.studentLevel),
-                _kv('School email', HostelData.studentEmail),
+                _kv('Department', student.displayDept),
+                _kv('Level', student.displayLevel),
+                _kv('School email', student.displayEmail),
               ],
             ),
           ),
@@ -179,9 +181,10 @@ class ProfilePage extends ConsumerWidget {
               label: 'Sign out',
               variant: RoostButtonVariant.destructive,
               icon: PhosphorIcons.signOut(),
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).maybePop();
-                context.go('/');
+                await ref.read(sessionProvider.notifier).signOut();
+                if (context.mounted) context.go('/');
               },
             ),
           ],

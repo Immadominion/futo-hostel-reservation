@@ -1,5 +1,11 @@
 # Roost — Backend Integration Guide
 
+> **Status:** the backend is built and deployed, and the app + admin are wired to
+> it. **Live API:** `https://futo-hostel-reservation-backend.onrender.com/api/v1`
+> · **Swagger:** `https://futo-hostel-reservation-backend.onrender.com/api/docs`.
+> The client side is described in [`INTEGRATION.md`](./INTEGRATION.md); the sections
+> below remain the source-of-truth contract for shapes and rules.
+
 **For the backend developer.** This document is derived directly from the Flutter
 app's screens and data models (`app/lib/`). It tells you **exactly what data each
 screen reads and writes**, the **JSON shapes** the app expects, the **business

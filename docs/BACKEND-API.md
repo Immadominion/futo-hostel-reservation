@@ -4,7 +4,7 @@ A short, framework-agnostic list of REST endpoints the mobile app + admin expect
 JSON in/out. Auth via a bearer token (JWT). Passwords hashed with **bcrypt**.
 Money in **kobo or naira integers** (no floats). Payments via **Remita (RRR)**.
 
-Base URL: `/api/v1`
+Base URL: `/api/v1`  ·  **Live:** `https://futo-hostel-reservation-backend.onrender.com/api/v1`  ·  **Docs:** `https://futo-hostel-reservation-backend.onrender.com/api/docs`
 
 ---
 

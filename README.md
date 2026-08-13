@@ -35,15 +35,21 @@ ported from our in-house Flutter design system; the web pages mirror its tokens 
 ### 📱 Mobile app (Flutter)
 ```bash
 cd app
-flutter pub get
-flutter run                      # on a connected device / emulator
+flutter pub get                                  # pulls http + flutter_secure_storage
+flutter run                                       # LIVE: talks to the deployed backend (default)
+flutter run --dart-define=USE_DEMO_DATA=true      # OFFLINE: built-in demo data, no network
 # or, in a browser:
 flutter run -d chrome
 ```
-- **Login:** any reg number like `20211234567` (or a school email
-  `name.surname.regno@futo.edu.ng`) + any password that is **8+ chars with a
-  letter and a number** (e.g. `futo2026`). Or tap **Use Face ID / Fingerprint**.
-- Demo data is static (`app/lib/core/demo/hostel_data.dart`) — no backend.
+- **Live mode (default):** the app signs in against the API, then loads hostels,
+  rooms and your reservations from the backend, and does a real reserve → pay →
+  allocation. The first request can take ~50s if the free-tier server is asleep.
+- **Demo mode** (`USE_DEMO_DATA=true`): runs entirely offline on the static data
+  in `app/lib/core/demo/hostel_data.dart` — use it for a guaranteed demo.
+- **Login:** register or sign in with a reg number like `20211234567` (or a school
+  email `name.surname.regno@futo.edu.ng`) + a password that is **8+ chars with a
+  letter and a number** (e.g. `futo2026`). After the first sign-in, **Face ID /
+  fingerprint** unlocks the saved session.
 
 ### 🌐 Landing page & admin (no build step)
 Open `landing/index.html` and `admin/index.html` directly, **or** serve the folder:
@@ -61,6 +67,19 @@ Edit the `CONFIG` block at the top of `landing/script.js`:
   placeholder.
 
 ---
+
+## Live backend
+
+- **API base:** `https://futo-hostel-reservation-backend.onrender.com/api/v1`
+- **API docs (Swagger):** `https://futo-hostel-reservation-backend.onrender.com/api/docs`
+- The Flutter app **and** the web admin talk to this by default. How the client is
+  wired (and how to point at a different backend) is in
+  [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
+- **Admin dashboard:** open `admin/index.html`, sign in with an admin account, and
+  it shows live occupancy, reservations and hostels. Append `?demo=1` to the URL to
+  run it fully offline on sample data.
+- Heads-up: the backend is on Render's free tier — after ~15 min idle it sleeps and
+  the next request cold-starts (~50s). Use demo mode for a guaranteed-instant demo.
 
 ## Maps & imagery
 - The landing embeds a **live Google Map** of FUTO and every hostel card links to

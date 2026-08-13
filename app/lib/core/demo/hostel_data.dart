@@ -1,10 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/app_config.dart';
 import '../widgets/status_pill.dart';
 
-/// Static demo data + the one piece of mutable app state (reservations).
-/// Everything reads from here directly — no backend, no async, kept simple.
-/// Values are representative for the FUTO demo (see REQUIREMENTS.md §4/§9).
+/// The app's data models + the in-memory reservation state.
+///
+/// The same model classes serve both modes: in **demo** mode they are filled
+/// from the static [HostelData.hostels] below; in **live** mode the session
+/// bootstrap hydrates them from the backend via `fromJson` (see
+/// core/session/session_controller.dart). Values here are representative for
+/// the FUTO demo (see REQUIREMENTS.md §4/§9).
 
 enum Gender { male, female, mixed, postgrad }
 
@@ -17,14 +22,70 @@ extension GenderLabel on Gender {
       };
 }
 
+// ---- JSON parse helpers (shared by the fromJson factories) ----
+
+Gender _genderFrom(String? s) => switch (s) {
+      'male' => Gender.male,
+      'female' => Gender.female,
+      'postgrad' => Gender.postgrad,
+      _ => Gender.mixed,
+    };
+
+RoostStatus? _statusFrom(String? s) => switch (s) {
+      'available' => RoostStatus.available,
+      'limited' => RoostStatus.limited,
+      'full' => RoostStatus.full,
+      _ => null,
+    };
+
+RoostStatus _resStatusFrom(String? s) => switch (s) {
+      'paid' => RoostStatus.paid,
+      'reserved' => RoostStatus.reserved,
+      'cancelled' => RoostStatus.cancelled,
+      _ => RoostStatus.pending,
+    };
+
+const List<String> _kMonths = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+String _fmtDate(DateTime d) => '${_kMonths[d.month - 1]} ${d.day}, ${d.year}';
+String _fmtIso(String? iso) {
+  if (iso == null || iso.isEmpty) return '';
+  final d = DateTime.tryParse(iso);
+  return d == null ? iso : _fmtDate(d.toLocal());
+}
+
 /// A room *type* within a hostel. [bedsAvailable] is mutable so reserving a bed
-/// decrements live availability (FR7) for the rest of the session.
+/// decrements live availability (FR7) for the rest of the session. [id] and
+/// [occupiedBeds] are populated in live mode (empty for static demo data).
 class RoomType {
-  RoomType(this.name, this.capacity, this.bedsAvailable, this.bedsTotal);
+  RoomType(
+    this.name,
+    this.capacity,
+    this.bedsAvailable,
+    this.bedsTotal, {
+    this.id = '',
+    List<int>? occupiedBeds,
+  }) : occupiedBeds = occupiedBeds ?? const [];
+
+  final String id;
   final String name;
   final int capacity;
   int bedsAvailable;
   final int bedsTotal;
+  final List<int> occupiedBeds; // bed numbers already taken (server-supplied)
+
+  factory RoomType.fromJson(Map<String, dynamic> j) => RoomType(
+        (j['name'] ?? '').toString(),
+        (j['capacity'] as num?)?.toInt() ?? 0,
+        (j['bedsAvailable'] as num?)?.toInt() ?? 0,
+        (j['bedsTotal'] as num?)?.toInt() ?? 0,
+        id: (j['id'] ?? '').toString(),
+        occupiedBeds: ((j['occupiedBeds'] as List?) ?? const [])
+            .map((e) => int.tryParse(e.toString()) ?? -1)
+            .where((n) => n > 0)
+            .toList(),
+      );
 }
 
 class Hostel {
@@ -42,7 +103,12 @@ class Hostel {
     required this.coverA,
     required this.coverB,
     required this.rooms,
-  });
+    int? bedsAvailableOverride,
+    int? bedsTotalOverride,
+    RoostStatus? statusOverride,
+  })  : _bedsAvailableOverride = bedsAvailableOverride,
+        _bedsTotalOverride = bedsTotalOverride,
+        _statusOverride = statusOverride;
 
   final String id, name, code, funder, roomSize, blurb;
   final Gender gender;
@@ -51,24 +117,65 @@ class Hostel {
   final int coverA, coverB; // cover gradient (ARGB)
   final List<RoomType> rooms;
 
-  int get bedsAvailable => rooms.fold(0, (s, r) => s + r.bedsAvailable);
-  int get bedsTotal => rooms.fold(0, (s, r) => s + r.bedsTotal);
+  // Server aggregates, used only when [rooms] is empty (e.g. the list endpoint,
+  // or a detail fetch that failed). When rooms are present we compute from them
+  // so a local reserve decrement reflects immediately.
+  final int? _bedsAvailableOverride, _bedsTotalOverride;
+  final RoostStatus? _statusOverride;
 
-  RoostStatus get status => bedsAvailable == 0
-      ? RoostStatus.full
-      : bedsAvailable <= 6
-          ? RoostStatus.limited
-          : RoostStatus.available;
+  int get bedsAvailable => rooms.isNotEmpty
+      ? rooms.fold(0, (s, r) => s + r.bedsAvailable)
+      : (_bedsAvailableOverride ?? 0);
+  int get bedsTotal => rooms.isNotEmpty
+      ? rooms.fold(0, (s, r) => s + r.bedsTotal)
+      : (_bedsTotalOverride ?? 0);
+
+  RoostStatus get status {
+    if (rooms.isEmpty && _statusOverride != null) return _statusOverride;
+    final a = bedsAvailable;
+    return a == 0
+        ? RoostStatus.full
+        : a <= 6
+            ? RoostStatus.limited
+            : RoostStatus.available;
+  }
 
   String get priceLabel => '₦${(price / 1000).toStringAsFixed(price % 1000 == 0 ? 0 : 1)}k';
   String get priceFull => '₦${price.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')}';
+
+  factory Hostel.fromJson(Map<String, dynamic> j) {
+    final rooms = (j['rooms'] as List?)
+            ?.map((e) => RoomType.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        <RoomType>[];
+    return Hostel(
+      id: (j['id'] ?? '').toString(),
+      name: (j['name'] ?? '').toString(),
+      code: (j['code'] ?? '').toString(),
+      funder: (j['funder'] ?? '').toString(),
+      gender: _genderFrom(j['gender']?.toString()),
+      price: (j['price'] as num?)?.toInt() ?? 0,
+      roomSize: (j['roomSize'] ?? '').toString(),
+      blurb: (j['blurb'] ?? '').toString(),
+      lat: (j['lat'] as num?)?.toDouble() ?? 0,
+      lng: (j['lng'] as num?)?.toDouble() ?? 0,
+      coverA: (j['coverA'] as num?)?.toInt() ?? 0xFF1E3A8A,
+      coverB: (j['coverB'] as num?)?.toInt() ?? 0xFF2563EB,
+      rooms: rooms,
+      bedsAvailableOverride: (j['bedsAvailable'] as num?)?.toInt(),
+      bedsTotalOverride: (j['bedsTotal'] as num?)?.toInt(),
+      statusOverride: _statusFrom(j['status']?.toString()),
+    );
+  }
 }
 
 class Reservation {
   Reservation({
+    this.id = '',
     required this.reference,
     required this.rrr,
     required this.hostelId,
+    this.roomId = '',
     required this.roomName,
     required this.bed,
     required this.fee,
@@ -76,30 +183,87 @@ class Reservation {
     required this.date,
   });
 
-  final String reference, rrr, hostelId, roomName, date;
+  final String id, reference, rrr, hostelId, roomId, roomName, date;
   final int bed, fee;
   final RoostStatus status;
 
   Reservation copyWith({RoostStatus? status}) => Reservation(
-        reference: reference, rrr: rrr, hostelId: hostelId, roomName: roomName,
-        bed: bed, fee: fee, status: status ?? this.status, date: date,
+        id: id,
+        reference: reference,
+        rrr: rrr,
+        hostelId: hostelId,
+        roomId: roomId,
+        roomName: roomName,
+        bed: bed,
+        fee: fee,
+        status: status ?? this.status,
+        date: date,
       );
 
   String get feeFull => '₦${fee.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')}';
+
+  factory Reservation.fromJson(Map<String, dynamic> j) => Reservation(
+        id: (j['id'] ?? '').toString(),
+        reference: (j['reference'] ?? '').toString(),
+        rrr: (j['rrr'] ?? '').toString(),
+        hostelId: (j['hostelId'] ?? '').toString(),
+        roomId: (j['roomId'] ?? '').toString(),
+        roomName: (j['roomName'] ?? '').toString(),
+        bed: (j['bed'] as num?)?.toInt() ?? 0,
+        fee: (j['fee'] as num?)?.toInt() ?? 0,
+        status: _resStatusFrom(j['status']?.toString()),
+        date: _fmtIso(j['createdAt']?.toString()),
+      );
+}
+
+/// The signed-in student. In demo mode this is [Student.demo]; in live mode it
+/// comes from `/auth/login` | `/auth/register` | `/auth/me`. Fields are nullable
+/// because a freshly registered account may not have a name/dept/level yet.
+class Student {
+  const Student({this.id, this.name, this.regNo, this.email, this.dept, this.level});
+
+  final String? id, name, regNo, email, dept, level;
+
+  factory Student.fromJson(Map<String, dynamic> j) => Student(
+        id: j['id']?.toString(),
+        name: j['name']?.toString(),
+        regNo: j['regNo']?.toString(),
+        email: j['email']?.toString(),
+        dept: j['dept']?.toString(),
+        level: j['level']?.toString(),
+      );
+
+  factory Student.demo() => const Student(
+        id: 'demo',
+        name: HostelData.studentName,
+        regNo: HostelData.studentRegNo,
+        email: HostelData.studentEmail,
+        dept: HostelData.studentDept,
+        level: HostelData.studentLevel,
+      );
+
+  String get displayName => (name != null && name!.trim().isNotEmpty)
+      ? name!
+      : (regNo ?? email?.split('@').first ?? 'Student');
+  String get displayRegNo => (regNo != null && regNo!.isNotEmpty) ? regNo! : (email ?? '');
+  String get displayDept => (dept != null && dept!.trim().isNotEmpty) ? dept! : '—';
+  String get displayLevel => (level != null && level!.trim().isNotEmpty) ? level! : '—';
+  String get displayEmail => (email != null && email!.isNotEmpty) ? email! : '—';
 }
 
 class HostelData {
   HostelData._();
 
-  // ---- signed-in student (demo) ----
+  // ---- signed-in student (demo fallback identity) ----
   static const String studentName = 'Chidi Okeke';
   static const String studentRegNo = '20211234567';
   static const String studentEmail = 'okeke.chidi.20211234567@futo.edu.ng';
   static const String studentDept = 'Software Engineering';
   static const String studentLevel = '400 Level';
 
-  // ---- the eight FUTO hostels (representative demo values) ----
-  static final List<Hostel> hostels = [
+  // ---- the eight FUTO hostels (representative demo values). Mutable: the live
+  //      bootstrap replaces this with server data via [replaceHostels]. ----
+  static List<Hostel> hostels = [
     Hostel(
       id: 'A', name: 'Hostel A', code: 'A', funder: 'School', gender: Gender.male,
       price: 42000, roomSize: '8–10 per room', lat: 5.3869, lng: 7.0341,
@@ -158,47 +322,93 @@ class HostelData {
     ),
   ];
 
-  static Hostel byId(String id) => hostels.firstWhere((h) => h.id == id);
+  /// Replace the in-memory hostels with server data (ignored if empty so a
+  /// failed fetch never blanks the browse screen).
+  static void replaceHostels(List<Hostel> list) {
+    if (list.isNotEmpty) hostels = list;
+  }
+
+  static Hostel? byIdOrNull(String id) {
+    for (final h in hostels) {
+      if (h.id == id) return h;
+    }
+    return null;
+  }
+
+  /// Never throws — returns a neutral placeholder if the id is unknown, so a
+  /// reservation for a hostel not in the current list still renders.
+  static Hostel byId(String id) => byIdOrNull(id) ?? _fallback(id);
+
+  static Hostel _fallback(String id) => Hostel(
+        id: id,
+        name: id,
+        code: id.length <= 2 ? id.toUpperCase() : id.substring(0, 2).toUpperCase(),
+        funder: '', gender: Gender.mixed, price: 0, roomSize: '', blurb: '',
+        lat: 0, lng: 0, coverA: 0xFF1E3A8A, coverB: 0xFF2563EB, rooms: const [],
+      );
 }
 
-// ---- reservations: the only mutable app state, via a Riverpod Notifier ----
+// ---- reservations: the mutable app state, via a Riverpod Notifier ----
+//
+// This controller holds NO network logic (keeps the module graph one-way).
+// Screens perform the API calls (via roostApiProvider) and feed the results in
+// through [setAll] / [add] / [replace]; demo mode uses [reserveDemo] directly.
 
 class ReservationsController extends Notifier<List<Reservation>> {
   @override
-  List<Reservation> build() => [
-        // one past (cancelled) booking so history isn't empty
-        Reservation(
-          reference: 'RST-7F3A21', rrr: '270054118832', hostelId: 'NDDC',
-          roomName: '4-bed room', bed: 2, fee: 62500,
-          status: RoostStatus.cancelled, date: 'Sep 14, 2025',
-        ),
+  List<Reservation> build() => AppConfig.useDemoData
+      ? [
+          // one past (cancelled) booking so demo history isn't empty
+          Reservation(
+            reference: 'RST-7F3A21', rrr: '270054118832', hostelId: 'NDDC',
+            roomName: '4-bed room', bed: 2, fee: 62500,
+            status: RoostStatus.cancelled, date: 'Sep 14, 2025',
+          ),
+        ]
+      : <Reservation>[];
+
+  bool get hasActive => state.any((r) =>
+      r.status == RoostStatus.paid ||
+      r.status == RoostStatus.reserved ||
+      r.status == RoostStatus.pending);
+
+  /// Load the student's reservations from the server (called on bootstrap).
+  void setAll(List<Reservation> list) => state = list;
+
+  /// Prepend a reservation (de-dupes by id when the server assigned one).
+  void add(Reservation r) =>
+      state = [r, ...state.where((x) => r.id.isEmpty || x.id != r.id)];
+
+  /// Swap in an updated reservation (e.g. after cancel).
+  void replace(Reservation r) => state = [
+        for (final x in state)
+          if ((r.id.isNotEmpty && x.id == r.id) || x.reference == r.reference) r else x,
       ];
 
-  bool get hasActive => state.any((r) => r.status == RoostStatus.paid || r.status == RoostStatus.reserved);
+  void markCancelled(String reference) => state = [
+        for (final x in state)
+          if (x.reference == reference) x.copyWith(status: RoostStatus.cancelled) else x,
+      ];
 
-  /// Reserve + pay a bed. Decrements live availability and records the booking.
-  Reservation reserve({required Hostel hostel, required RoomType room, required int bed, required int fee}) {
+  /// Demo-mode reserve: synthesise a paid booking in memory (no backend).
+  /// Decrements live availability and records the booking.
+  Reservation reserveDemo({
+    required Hostel hostel,
+    required RoomType room,
+    required int bed,
+    required int fee,
+  }) {
     if (room.bedsAvailable > 0) room.bedsAvailable -= 1;
     final stamp = DateTime.now();
     final res = Reservation(
       reference: 'RST-${stamp.millisecondsSinceEpoch.toRadixString(16).substring(4).toUpperCase()}',
       rrr: (stamp.millisecondsSinceEpoch % 1000000000000).toString().padLeft(12, '0'),
-      hostelId: hostel.id, roomName: room.name, bed: bed, fee: fee,
-      status: RoostStatus.paid, date: _fmt(stamp),
+      hostelId: hostel.id, roomId: room.id, roomName: room.name, bed: bed, fee: fee,
+      status: RoostStatus.paid, date: _fmtDate(stamp),
     );
     state = [res, ...state];
     return res;
   }
-
-  void cancel(String reference) {
-    state = [
-      for (final r in state)
-        if (r.reference == reference) r.copyWith(status: RoostStatus.cancelled) else r,
-    ];
-  }
-
-  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  static String _fmt(DateTime d) => '${_months[d.month - 1]} ${d.day}, ${d.year}';
 }
 
 final reservationsProvider =

@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:futo_hostel/app.dart';
+import 'package:futo_hostel/core/config/app_config.dart';
 import 'package:futo_hostel/core/widgets/hostel_card.dart';
 
 /// Drives the core journey on a 360px-wide phone (the common Android width)
 /// and asserts every screen lays out with no exceptions / overflow.
 void main() {
+  // Drive the journey against the built-in demo data (no network).
+  AppConfig.useDemoData = true;
+
   testWidgets('core flow renders cleanly on a 360px phone', (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1.0;

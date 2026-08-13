@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../../core/session/session_controller.dart';
 import '../../core/theme/brightness_provider.dart';
 import '../../core/theme/squircle_button.dart';
 import '../../core/theme/surface_card.dart';
@@ -29,6 +30,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final _id = TextEditingController();
   final _pw = TextEditingController();
   bool _obscure = true;
+  bool _busy = false;
   String? _error;
 
   @override
@@ -38,7 +40,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.dispose();
   }
 
-  void _signIn() {
+  Future<void> _signIn() async {
     final id = _id.text.trim();
     if (!validIdentifier(id)) {
       setState(() => _error = 'Enter your reg number (e.g. 20211234567) or school email.');
@@ -48,8 +50,26 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       setState(() => _error = 'Password must be at least 8 characters with a letter and a number.');
       return;
     }
-    setState(() => _error = null);
-    context.go('/home');
+    await _authenticate(id, _pw.text, register: false);
+  }
+
+  /// Sign in (or register) via the session controller, then bootstrap + navigate.
+  /// In demo mode this returns instantly; live mode may pause on a cold backend.
+  Future<void> _authenticate(String identifier, String password, {required bool register}) async {
+    setState(() {
+      _error = null;
+      _busy = true;
+    });
+    final err = await ref
+        .read(sessionProvider.notifier)
+        .signIn(identifier: identifier, password: password, register: register);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (err == null) {
+      context.go('/home');
+    } else {
+      setState(() => _error = err);
+    }
   }
 
   Future<void> _biometric() async {
@@ -62,10 +82,23 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               localizedReason: 'Unlock Roost to view your hostel',
               options: const AuthenticationOptions(stickyAuth: true),
             )
-          : true; // demo fallback on devices/web without biometrics
-      if (ok && mounted) context.go('/home');
+          : true; // fallback on devices/web without biometrics
+      if (!ok || !mounted) return;
+      setState(() {
+        _error = null;
+        _busy = true;
+      });
+      final restored = await ref.read(sessionProvider.notifier).restoreSession();
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (restored) {
+        context.go('/home');
+      } else {
+        setState(() => _error =
+            'Sign in with your password once — then Face ID / fingerprint unlocks next time.');
+      }
     } catch (_) {
-      if (mounted) context.go('/home'); // demo fallback
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -132,13 +165,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                         ),
                       ],
                       const SizedBox(height: RoostSpacing.xl),
-                      RoostButton(label: 'Sign in', onPressed: _signIn),
+                      RoostButton(
+                        label: 'Sign in',
+                        isLoading: _busy,
+                        onPressed: _busy ? null : _signIn,
+                      ),
                       const SizedBox(height: RoostSpacing.md),
                       RoostButton(
                         label: 'Use Face ID / Fingerprint',
                         variant: RoostButtonVariant.secondary,
                         icon: PhosphorIcons.fingerprint(),
-                        onPressed: _biometric,
+                        onPressed: _busy ? null : _biometric,
                       ),
                     ],
                   ),
@@ -237,8 +274,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     errorNotifier.value = 'Passwords do not match.';
                     return;
                   }
+                  final identifier = id.text.trim();
+                  final password = pw.text;
                   Navigator.of(ctx).pop();
-                  context.go('/home');
+                  _authenticate(identifier, password, register: true);
                 },
               ),
             ],

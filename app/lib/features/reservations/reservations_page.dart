@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../../core/api/roost_api.dart';
+import '../../core/config/app_config.dart';
 import '../../core/demo/hostel_data.dart';
 import '../../core/theme/brightness_provider.dart';
 import '../../core/theme/squircle_button.dart';
@@ -124,10 +126,7 @@ class ReservationsPage extends ConsumerWidget {
               RoostButton(
                 label: 'Cancel reservation',
                 variant: RoostButtonVariant.destructive,
-                onPressed: () {
-                  ref.read(reservationsProvider.notifier).cancel(r.reference);
-                  Navigator.of(context).pop();
-                },
+                onPressed: () => _cancel(context, ref, r),
               )
             else
               RoostButton(
@@ -139,6 +138,28 @@ class ReservationsPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Cancel a paid booking (frees the bed). Demo mode flips it locally; live
+  /// mode calls the API and swaps in the server's updated reservation.
+  Future<void> _cancel(BuildContext context, WidgetRef ref, Reservation r) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (AppConfig.useDemoData) {
+        ref.read(reservationsProvider.notifier).markCancelled(r.reference);
+      } else {
+        final updated = await ref.read(roostApiProvider).cancelReservation(r.id);
+        ref.read(reservationsProvider.notifier).replace(updated);
+      }
+      navigator.pop();
+    } on ApiException catch (e) {
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      navigator.pop();
+      messenger.showSnackBar(const SnackBar(content: Text('Could not cancel. Please try again.')));
+    }
   }
 
   Widget _row(String label, String value, {bool mono = false}) => Padding(
