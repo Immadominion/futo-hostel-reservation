@@ -9,6 +9,13 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # The phosphor icon set is vendored + patched (see pubspec dependency_overrides);
+  # don't lint the third-party package or build output as our own code.
+  exclude:
+    - vendor/**
+    - build/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
