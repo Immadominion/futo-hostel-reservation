@@ -10,7 +10,6 @@ import '../../core/theme/squircle_button.dart';
 import '../../core/theme/surface_card.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/roost_input.dart';
-import '../../core/widgets/wavy_sheet.dart';
 
 /// Login. Sign in with reg-number or school email + password (FR1), with a
 /// Face ID / fingerprint option (FR3) and a create-account sheet (FR2).
@@ -183,7 +182,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 const SizedBox(height: RoostSpacing.xl),
                 Center(
                   child: GestureDetector(
-                    onTap: _openSignUp,
+                    onTap: _busy ? null : () => context.push('/signup'),
                     behavior: HitTestBehavior.opaque,
                     child: RichText(
                       text: TextSpan(
@@ -225,45 +224,25 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         child: Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: RoostColors.textSecondary)),
       );
 
-  void _openSignUp() {
-    showRoostWavySheet(
-      context: context,
-      headerHeight: 150,
-      header: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(PhosphorIcons.userPlus(), size: 30, color: RoostColors.onAccent),
-          const SizedBox(height: RoostSpacing.sm),
-          Text('Create account', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: RoostColors.onAccent)),
-        ],
-      ),
-      child: _SignUpForm(
-        onSubmit: (identifier, password) {
-          Navigator.of(context).pop();
-          _authenticate(identifier, password, register: true);
-        },
-      ),
-    );
-  }
 }
 
-/// The create-account form. Its own stateful widget so each password field has an
-/// independent show/hide toggle, and it scrolls so the focused field lifts above
-/// the keyboard (the sheet itself is keyboard-aware — see [showRoostWavySheet]).
-class _SignUpForm extends StatefulWidget {
-  const _SignUpForm({required this.onSubmit});
-  final void Function(String identifier, String password) onSubmit;
+/// Full-screen create-account page. Mirrors the sign-in screen (so it can't be
+/// dismissed by tapping away like a sheet), with its own show/hide password
+/// toggles and an "Already have an account? Sign in" CTA that returns to sign-in.
+class SignUpPage extends ConsumerStatefulWidget {
+  const SignUpPage({super.key});
 
   @override
-  State<_SignUpForm> createState() => _SignUpFormState();
+  ConsumerState<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _SignUpFormState extends State<_SignUpForm> {
+class _SignUpPageState extends ConsumerState<SignUpPage> {
   final _id = TextEditingController();
   final _pw = TextEditingController();
   final _confirm = TextEditingController();
   bool _pwObscure = true;
   bool _confirmObscure = true;
+  bool _busy = false;
   String? _error;
 
   @override
@@ -274,23 +253,39 @@ class _SignUpFormState extends State<_SignUpForm> {
     super.dispose();
   }
 
-  void _submit() {
-    if (!validIdentifier(_id.text.trim())) {
-      setState(() => _error = 'Enter a valid reg number or school email.');
+  Future<void> _create() async {
+    final id = _id.text.trim();
+    if (!validIdentifier(id)) {
+      setState(() => _error = 'Enter your reg number (e.g. 20211234567) or school email.');
       return;
     }
     if (!validPassword(_pw.text)) {
-      setState(() => _error = 'Password needs 8+ characters with a letter and a number.');
+      setState(() => _error = 'Password must be at least 8 characters with a letter and a number.');
       return;
     }
     if (_pw.text != _confirm.text) {
       setState(() => _error = 'Passwords do not match.');
       return;
     }
-    widget.onSubmit(_id.text.trim(), _pw.text);
+    setState(() {
+      _error = null;
+      _busy = true;
+    });
+    final err = await ref
+        .read(sessionProvider.notifier)
+        .signIn(identifier: id, password: _pw.text, register: true);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (err == null) {
+      context.go('/home');
+    } else {
+      setState(() => _error = err);
+    }
   }
 
-  Widget _eye(bool obscure, VoidCallback onTap) => GestureDetector(
+  void _backToSignIn() => context.canPop() ? context.pop() : context.go('/');
+
+  Widget _eyeSuffix(bool obscure, VoidCallback onTap) => GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Icon(obscure ? PhosphorIcons.eye() : PhosphorIcons.eyeSlash(),
@@ -299,48 +294,125 @@ class _SignUpFormState extends State<_SignUpForm> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xxl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          RoostTextField(
-            controller: _id,
-            hint: 'Reg number or school email',
-            icon: PhosphorIcons.identificationCard(),
-            keyboardType: TextInputType.emailAddress,
-            action: TextInputAction.next,
+    ref.watch(brightnessProvider);
+    return Scaffold(
+      backgroundColor: RoostColors.surface0,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(RoostSpacing.xxl, 0, RoostSpacing.xxl, RoostSpacing.xxl),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.vertical - 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 56),
+                _Wordmark(),
+                const SizedBox(height: RoostSpacing.sm),
+                Text('FUTO Hostel Reservation',
+                    style: TextStyle(fontSize: 16, color: RoostColors.textSecondary, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                Text('Create your account to reserve a bed.',
+                    style: TextStyle(fontSize: 14, color: RoostColors.textTertiary, height: 1.4)),
+                const SizedBox(height: RoostSpacing.xxxl),
+                RoostSurfaceCard(
+                  floating: true,
+                  padding: const EdgeInsets.all(RoostSpacing.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label('Reg number or school email'),
+                      RoostTextField(
+                        controller: _id,
+                        hint: '20211234567',
+                        icon: PhosphorIcons.identificationCard(),
+                        keyboardType: TextInputType.emailAddress,
+                        action: TextInputAction.next,
+                      ),
+                      const SizedBox(height: RoostSpacing.lg),
+                      _label('Password'),
+                      RoostTextField(
+                        controller: _pw,
+                        hint: '••••••••',
+                        icon: PhosphorIcons.lockSimple(),
+                        obscure: _pwObscure,
+                        action: TextInputAction.next,
+                        suffix: _eyeSuffix(_pwObscure, () => setState(() => _pwObscure = !_pwObscure)),
+                      ),
+                      const SizedBox(height: RoostSpacing.lg),
+                      _label('Confirm password'),
+                      RoostTextField(
+                        controller: _confirm,
+                        hint: '••••••••',
+                        icon: PhosphorIcons.lockSimple(),
+                        obscure: _confirmObscure,
+                        action: TextInputAction.done,
+                        onSubmitted: (_) => _create(),
+                        suffix: _eyeSuffix(_confirmObscure, () => setState(() => _confirmObscure = !_confirmObscure)),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: RoostSpacing.md),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(PhosphorIcons.warningCircle(), size: 16, color: RoostColors.negative),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text(_error!, style: TextStyle(fontSize: 12.5, color: RoostColors.negative, height: 1.3))),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: RoostSpacing.xl),
+                      RoostButton(
+                        label: 'Create account',
+                        isLoading: _busy,
+                        onPressed: _busy ? null : _create,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: RoostSpacing.xl),
+                Center(
+                  child: GestureDetector(
+                    onTap: _busy ? null : _backToSignIn,
+                    behavior: HitTestBehavior.opaque,
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(fontSize: 14, color: RoostColors.textSecondary, fontFamily: 'Montserrat'),
+                        children: [
+                          const TextSpan(text: 'Already have an account?  '),
+                          TextSpan(text: 'Sign in',
+                              style: TextStyle(color: RoostColors.accent, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: RoostSpacing.xxxl),
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(PhosphorIcons.shieldCheck(), size: 16, color: RoostColors.textTertiary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text('Secured for FUTO students',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: RoostColors.textTertiary, fontWeight: FontWeight.w500)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: RoostSpacing.md),
-          RoostTextField(
-            controller: _pw,
-            hint: 'Password (8+ chars, a letter & a number)',
-            icon: PhosphorIcons.lockSimple(),
-            obscure: _pwObscure,
-            action: TextInputAction.next,
-            suffix: _eye(_pwObscure, () => setState(() => _pwObscure = !_pwObscure)),
-          ),
-          const SizedBox(height: RoostSpacing.md),
-          RoostTextField(
-            controller: _confirm,
-            hint: 'Confirm password',
-            icon: PhosphorIcons.lockSimple(),
-            obscure: _confirmObscure,
-            action: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
-            suffix: _eye(_confirmObscure, () => setState(() => _confirmObscure = !_confirmObscure)),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: RoostSpacing.md),
-            Text(_error!, style: TextStyle(fontSize: 12.5, color: RoostColors.negative, height: 1.3)),
-          ],
-          const SizedBox(height: RoostSpacing.xl),
-          RoostButton(label: 'Create account', onPressed: _submit),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _label(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: RoostSpacing.sm, left: 2),
+        child: Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: RoostColors.textSecondary)),
+      );
 }
 
 class _Wordmark extends StatelessWidget {
