@@ -132,24 +132,33 @@ Future<T?> showRoostWavySheet<T>({
     barrierColor: const Color(0x73000000),
     transitionDuration: RoostMotion.modalEnter,
     pageBuilder: (ctx, _, _) {
-      final maxH = MediaQuery.of(ctx).size.height * 0.86;
       return Align(
         alignment: Alignment.bottomCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
-          child: SafeArea(
-            top: false,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: maxH),
-              child: RoostWavySheet(
-                headerHeight: headerHeight,
-                headerGradient: headerGradient,
-                headerForeground: headerForeground,
-                header: header,
-                child: child,
+        // Builder so viewInsets is read reactively: when a field is focused the
+        // sheet lifts above the keyboard and caps its height to the space left,
+        // instead of the keyboard covering the content.
+        child: Builder(
+          builder: (ctx) {
+            final mq = MediaQuery.of(ctx);
+            final keyboard = mq.viewInsets.bottom;
+            final maxH = (mq.size.height - keyboard) * 0.92;
+            return Padding(
+              padding: EdgeInsets.only(left: 12, right: 12, bottom: 14 + keyboard),
+              child: SafeArea(
+                top: false,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxH),
+                  child: RoostWavySheet(
+                    headerHeight: headerHeight,
+                    headerGradient: headerGradient,
+                    headerForeground: headerForeground,
+                    header: header,
+                    child: child,
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       );
     },

@@ -226,10 +226,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       );
 
   void _openSignUp() {
-    final id = TextEditingController();
-    final pw = TextEditingController();
-    final confirm = TextEditingController();
-    final errorNotifier = ValueNotifier<String?>(null);
     showRoostWavySheet(
       context: context,
       headerHeight: 150,
@@ -241,48 +237,107 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           Text('Create account', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: RoostColors.onAccent)),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xxl),
-        child: ValueListenableBuilder<String?>(
-          valueListenable: errorNotifier,
-          builder: (ctx, error, _) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RoostTextField(controller: id, hint: 'Reg number or school email', icon: PhosphorIcons.identificationCard()),
-              const SizedBox(height: RoostSpacing.md),
-              RoostTextField(controller: pw, hint: 'Password (8+ chars, a letter & a number)', icon: PhosphorIcons.lockSimple(), obscure: true),
-              const SizedBox(height: RoostSpacing.md),
-              RoostTextField(controller: confirm, hint: 'Confirm password', icon: PhosphorIcons.lockSimple(), obscure: true),
-              if (error != null) ...[
-                const SizedBox(height: RoostSpacing.md),
-                Text(error, style: TextStyle(fontSize: 12.5, color: RoostColors.negative, height: 1.3)),
-              ],
-              const SizedBox(height: RoostSpacing.xl),
-              RoostButton(
-                label: 'Create account',
-                onPressed: () {
-                  if (!validIdentifier(id.text.trim())) {
-                    errorNotifier.value = 'Enter a valid reg number or school email.';
-                    return;
-                  }
-                  if (!validPassword(pw.text)) {
-                    errorNotifier.value = 'Password needs 8+ characters with a letter and a number.';
-                    return;
-                  }
-                  if (pw.text != confirm.text) {
-                    errorNotifier.value = 'Passwords do not match.';
-                    return;
-                  }
-                  final identifier = id.text.trim();
-                  final password = pw.text;
-                  Navigator.of(ctx).pop();
-                  _authenticate(identifier, password, register: true);
-                },
-              ),
-            ],
+      child: _SignUpForm(
+        onSubmit: (identifier, password) {
+          Navigator.of(context).pop();
+          _authenticate(identifier, password, register: true);
+        },
+      ),
+    );
+  }
+}
+
+/// The create-account form. Its own stateful widget so each password field has an
+/// independent show/hide toggle, and it scrolls so the focused field lifts above
+/// the keyboard (the sheet itself is keyboard-aware — see [showRoostWavySheet]).
+class _SignUpForm extends StatefulWidget {
+  const _SignUpForm({required this.onSubmit});
+  final void Function(String identifier, String password) onSubmit;
+
+  @override
+  State<_SignUpForm> createState() => _SignUpFormState();
+}
+
+class _SignUpFormState extends State<_SignUpForm> {
+  final _id = TextEditingController();
+  final _pw = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _pwObscure = true;
+  bool _confirmObscure = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _id.dispose();
+    _pw.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!validIdentifier(_id.text.trim())) {
+      setState(() => _error = 'Enter a valid reg number or school email.');
+      return;
+    }
+    if (!validPassword(_pw.text)) {
+      setState(() => _error = 'Password needs 8+ characters with a letter and a number.');
+      return;
+    }
+    if (_pw.text != _confirm.text) {
+      setState(() => _error = 'Passwords do not match.');
+      return;
+    }
+    widget.onSubmit(_id.text.trim(), _pw.text);
+  }
+
+  Widget _eye(bool obscure, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Icon(obscure ? PhosphorIcons.eye() : PhosphorIcons.eyeSlash(),
+            size: 20, color: RoostColors.textTertiary),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xxl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RoostTextField(
+            controller: _id,
+            hint: 'Reg number or school email',
+            icon: PhosphorIcons.identificationCard(),
+            keyboardType: TextInputType.emailAddress,
+            action: TextInputAction.next,
           ),
-        ),
+          const SizedBox(height: RoostSpacing.md),
+          RoostTextField(
+            controller: _pw,
+            hint: 'Password (8+ chars, a letter & a number)',
+            icon: PhosphorIcons.lockSimple(),
+            obscure: _pwObscure,
+            action: TextInputAction.next,
+            suffix: _eye(_pwObscure, () => setState(() => _pwObscure = !_pwObscure)),
+          ),
+          const SizedBox(height: RoostSpacing.md),
+          RoostTextField(
+            controller: _confirm,
+            hint: 'Confirm password',
+            icon: PhosphorIcons.lockSimple(),
+            obscure: _confirmObscure,
+            action: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            suffix: _eye(_confirmObscure, () => setState(() => _confirmObscure = !_confirmObscure)),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: RoostSpacing.md),
+            Text(_error!, style: TextStyle(fontSize: 12.5, color: RoostColors.negative, height: 1.3)),
+          ],
+          const SizedBox(height: RoostSpacing.xl),
+          RoostButton(label: 'Create account', onPressed: _submit),
+        ],
       ),
     );
   }
