@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- Also covers the in-app Paystack checkout WebView (payment_webview_page.dart) —
+         webview_flutter needs no permission beyond this; its bundled manifest
+         declares none of its own. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="futo_hostel"

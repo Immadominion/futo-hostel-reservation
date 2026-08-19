@@ -81,13 +81,6 @@ class HostelDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: RoostSpacing.xl),
                       _AvailabilityHero(h: h),
-                      const SizedBox(height: RoostSpacing.xxl),
-                      Text('Rooms', style: Theme.of(context).textTheme.headlineSmall),
-                      const SizedBox(height: RoostSpacing.md),
-                      for (final r in h.rooms) ...[
-                        _RoomRow(room: r),
-                        const SizedBox(height: RoostSpacing.md),
-                      ],
                     ],
                   ),
                 ),
@@ -210,41 +203,6 @@ class _AvailabilityHero extends StatelessWidget {
               valueColor: AlwaysStoppedAnimation(RoostColors.accent),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoomRow extends StatelessWidget {
-  const _RoomRow({required this.room});
-  final RoomType room;
-
-  RoostStatus get _status => room.bedsAvailable == 0
-      ? RoostStatus.full
-      : room.bedsAvailable <= 4
-          ? RoostStatus.limited
-          : RoostStatus.available;
-
-  @override
-  Widget build(BuildContext context) {
-    return RoostSurfaceCard(
-      floating: true,
-      padding: const EdgeInsets.all(RoostSpacing.lg),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(room.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
-                const SizedBox(height: 2),
-                Text('${room.capacity} per room  ·  ${room.bedsAvailable} beds open',
-                    style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
-              ],
-            ),
-          ),
-          StatusPill(_status),
         ],
       ),
     );

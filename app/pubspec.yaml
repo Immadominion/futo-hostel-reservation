@@ -29,6 +29,9 @@ dependencies:
   http: ^1.2.2
   flutter_secure_storage: ^9.2.2
 
+  # in-app Paystack checkout (sandbox)
+  webview_flutter: ^4.13.0
+
 # phosphor_flutter 2.1.0 (the latest published version) declares
 # `class PhosphorIconData extends IconData`, but current Flutter marks IconData
 # as a `final class` that can't be extended outside its library, so the build
@@ -45,8 +48,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/hostels/
   fonts:
     - family: Montserrat
       fonts:
