@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../admin/admin_models.dart';
 import '../config/app_config.dart';
-import '../demo/hostel_data.dart' show Gender, Hostel, RoomType;
+import '../demo/hostel_data.dart' show Gender, Hostel, Room;
 import 'roost_api.dart' show ApiException;
 
 class AdminAuthResult {
@@ -135,7 +135,7 @@ class AdminApi {
     required String funder,
     required Gender gender,
     required int price,
-    required String roomSize,
+    required int capacity,
     required String blurb,
     required double lat,
     required double lng,
@@ -144,7 +144,7 @@ class AdminApi {
   }) async {
     final j = await _post('/admin/hostels', {
       'id': id, 'name': name, 'code': code, 'funder': funder, 'gender': _genderStr(gender),
-      'price': price, 'roomSize': roomSize, 'blurb': blurb, 'lat': lat, 'lng': lng,
+      'price': price, 'capacity': capacity, 'blurb': blurb, 'lat': lat, 'lng': lng,
       'coverA': coverA, 'coverB': coverB,
     }) as Map<String, dynamic>;
     return Hostel.fromJson(j);
@@ -157,27 +157,15 @@ class AdminApi {
 
   Future<void> deleteHostel(String id) => _delete('/admin/hostels/$id');
 
-  // ---- rooms ----
-  Future<List<RoomType>> rooms({String? hostelId}) async {
+  // ---- rooms ---- (capacity is fixed per-hostel now — a room only needs hostelId)
+  Future<List<Room>> rooms({String? hostelId}) async {
     final j = await _get('/admin/rooms', hostelId == null ? null : {'hostelId': hostelId}) as List<dynamic>;
-    return j.map((e) => RoomType.fromJson(e as Map<String, dynamic>)).toList();
+    return j.map((e) => Room.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<RoomType> createRoom({
-    required String hostelId,
-    required String name,
-    required int capacity,
-    required int bedsTotal,
-  }) async {
-    final j = await _post('/admin/rooms', {
-      'hostelId': hostelId, 'name': name, 'capacity': capacity, 'bedsTotal': bedsTotal,
-    }) as Map<String, dynamic>;
-    return RoomType.fromJson(j);
-  }
-
-  Future<RoomType> updateRoom(String id, Map<String, dynamic> patch) async {
-    final j = await _patch('/admin/rooms/$id', patch) as Map<String, dynamic>;
-    return RoomType.fromJson(j);
+  Future<Room> createRoom({required String hostelId}) async {
+    final j = await _post('/admin/rooms', {'hostelId': hostelId}) as Map<String, dynamic>;
+    return Room.fromJson(j);
   }
 
   Future<void> deleteRoom(String id) => _delete('/admin/rooms/$id');

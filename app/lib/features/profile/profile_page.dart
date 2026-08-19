@@ -101,7 +101,7 @@ class ProfilePage extends ConsumerWidget {
                       children: [
                         Text(HostelData.byId(active.hostelId).name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 2),
-                        Text('${active.roomName}  ·  Bed ${active.bed}', style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
+                        Text('Room ${active.roomIndex}  ·  Bed ${active.bed}', style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
                       ],
                     ),
                   ),

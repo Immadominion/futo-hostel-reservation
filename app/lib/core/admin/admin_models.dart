@@ -79,7 +79,7 @@ class AdminReservation {
     required this.studentId,
     required this.hostelId,
     required this.roomId,
-    required this.roomName,
+    required this.roomIndex,
     required this.bed,
     required this.fee,
     required this.status,
@@ -89,8 +89,8 @@ class AdminReservation {
     this.studentLevel,
   });
 
-  final String id, reference, rrr, studentId, hostelId, roomId, roomName, createdAtIso;
-  final int bed, fee;
+  final String id, reference, rrr, studentId, hostelId, roomId, createdAtIso;
+  final int roomIndex, bed, fee;
   final RoostStatus status;
   final String? studentName, studentRegNo, studentLevel;
 
@@ -101,7 +101,7 @@ class AdminReservation {
         studentId: (j['studentId'] ?? '').toString(),
         hostelId: (j['hostelId'] ?? '').toString(),
         roomId: (j['roomId'] ?? '').toString(),
-        roomName: (j['roomName'] ?? '').toString(),
+        roomIndex: (j['roomIndex'] as num?)?.toInt() ?? 0,
         bed: (j['bed'] as num?)?.toInt() ?? 0,
         fee: (j['fee'] as num?)?.toInt() ?? 0,
         status: _statusFromReservation(j['status']?.toString()),

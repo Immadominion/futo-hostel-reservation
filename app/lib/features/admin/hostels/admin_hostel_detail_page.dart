@@ -5,13 +5,11 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/api/admin_api.dart';
 import '../../../core/api/roost_api.dart' show ApiException;
-import '../../../core/demo/hostel_data.dart' show GenderLabel, Hostel, RoomType;
+import '../../../core/demo/hostel_data.dart' show GenderLabel, Hostel, Room;
 import '../../../core/theme/brightness_provider.dart';
-import '../../../core/theme/squircle_button.dart';
 import '../../../core/theme/surface_card.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/hostel_glyph.dart';
-import '../../../core/widgets/roost_input.dart';
 import '../../../core/widgets/status_pill.dart';
 import '../../../core/widgets/wavy_sheet.dart';
 import 'admin_hostels_page.dart' show HostelForm;
@@ -111,45 +109,40 @@ class _AdminHostelDetailPageState extends ConsumerState<AdminHostelDetailPage> {
     }
   }
 
+  /// Capacity is fixed per hostel now, so adding a room has nothing to
+  /// configure — it's just "add one more room the same size as the rest."
   Future<void> _createRoom() async {
-    final created = await showRoostWavySheet<bool>(
-      context: context,
-      headerHeight: 130,
-      header: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(PhosphorIcons.bed(), size: 30, color: RoostColors.onAccent),
-          const SizedBox(height: RoostSpacing.sm),
-          Text('New room type', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: RoostColors.onAccent)),
-        ],
-      ),
-      child: _RoomForm(hostelId: widget.hostelId),
-    );
-    if (created == true) _load();
-  }
-
-  Future<void> _editRoom(RoomType room) async {
-    final saved = await showRoostWavySheet<bool>(
-      context: context,
-      headerHeight: 130,
-      header: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(PhosphorIcons.pencilSimple(), size: 30, color: RoostColors.onAccent),
-          const SizedBox(height: RoostSpacing.sm),
-          Text('Edit room type', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: RoostColors.onAccent)),
-        ],
-      ),
-      child: _RoomForm(hostelId: widget.hostelId, existing: room),
-    );
-    if (saved == true) _load();
-  }
-
-  Future<void> _deleteRoom(RoomType room) async {
+    final hostel = _hostel;
+    if (hostel == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete "${room.name}"?'),
+        title: const Text('Add a room?'),
+        content: Text('Adds one more room with ${hostel.capacity} beds, same as every other room here.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Add')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(adminApiProvider).createRoom(hostelId: widget.hostelId);
+      _load();
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not add. Please try again.')));
+      }
+    }
+  }
+
+  Future<void> _deleteRoom(Room room) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete Room ${room.index}?'),
         content: const Text('This fails if it has active reservations. This cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
@@ -284,7 +277,10 @@ class _AdminHostelDetailPageState extends ConsumerState<AdminHostelDetailPage> {
           const SizedBox(height: RoostSpacing.xl),
           Row(
             children: [
-              Expanded(child: Text('Room types', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.2))),
+              Expanded(
+                child: Text('Rooms · ${hostel.capacity} per room',
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+              ),
               GestureDetector(
                 onTap: _createRoom,
                 behavior: HitTestBehavior.opaque,
@@ -302,10 +298,10 @@ class _AdminHostelDetailPageState extends ConsumerState<AdminHostelDetailPage> {
           if (hostel.rooms.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: RoostSpacing.lg),
-              child: Text('No room types yet.', style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
+              child: Text('No rooms yet.', style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
             ),
           for (final room in hostel.rooms) ...[
-            _RoomRow(room: room, onEdit: () => _editRoom(room), onDelete: () => _deleteRoom(room)),
+            _RoomRow(room: room, onDelete: () => _deleteRoom(room)),
             const SizedBox(height: RoostSpacing.md),
           ],
         ],
@@ -315,9 +311,8 @@ class _AdminHostelDetailPageState extends ConsumerState<AdminHostelDetailPage> {
 }
 
 class _RoomRow extends StatelessWidget {
-  const _RoomRow({required this.room, required this.onEdit, required this.onDelete});
-  final RoomType room;
-  final VoidCallback onEdit;
+  const _RoomRow({required this.room, required this.onDelete});
+  final Room room;
   final VoidCallback onDelete;
 
   @override
@@ -336,23 +331,15 @@ class _RoomRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(room.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+                Text('Room ${room.index}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
                 const SizedBox(height: 2),
-                Text('${room.capacity} per room · ${room.bedsAvailable}/${room.bedsTotal} beds open',
+                Text('${room.bedsAvailable}/${room.bedsTotal} beds open',
                     style: TextStyle(fontSize: 12.5, color: RoostColors.textTertiary)),
               ],
             ),
           ),
           StatusPill(status),
           const SizedBox(width: RoostSpacing.sm),
-          GestureDetector(
-            onTap: onEdit,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Icon(PhosphorIcons.pencilSimple(), size: 18, color: RoostColors.textSecondary),
-            ),
-          ),
           GestureDetector(
             onTap: onDelete,
             behavior: HitTestBehavior.opaque,
@@ -365,117 +352,4 @@ class _RoomRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _RoomForm extends ConsumerStatefulWidget {
-  const _RoomForm({required this.hostelId, this.existing});
-  final String hostelId;
-  final RoomType? existing;
-
-  @override
-  ConsumerState<_RoomForm> createState() => _RoomFormState();
-}
-
-class _RoomFormState extends ConsumerState<_RoomForm> {
-  late final _name = TextEditingController(text: widget.existing?.name ?? '');
-  late final _capacity = TextEditingController(text: widget.existing?.capacity.toString() ?? '');
-  late final _bedsTotal = TextEditingController(text: widget.existing?.bedsTotal.toString() ?? '');
-  bool _busy = false;
-  String? _error;
-
-  bool get _isEdit => widget.existing != null;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _capacity.dispose();
-    _bedsTotal.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final name = _name.text.trim();
-    final capacity = int.tryParse(_capacity.text.trim());
-    final bedsTotal = int.tryParse(_bedsTotal.text.trim());
-    if (name.isEmpty) {
-      setState(() => _error = 'Name is required.');
-      return;
-    }
-    if (capacity == null || capacity < 1) {
-      setState(() => _error = 'Enter a valid capacity.');
-      return;
-    }
-    if (bedsTotal == null || bedsTotal < 1) {
-      setState(() => _error = 'Enter a valid total bed count.');
-      return;
-    }
-
-    setState(() {
-      _error = null;
-      _busy = true;
-    });
-    try {
-      final api = ref.read(adminApiProvider);
-      if (_isEdit) {
-        await api.updateRoom(widget.existing!.id, {'name': name, 'capacity': capacity, 'bedsTotal': bedsTotal});
-      } else {
-        await api.createRoom(hostelId: widget.hostelId, name: name, capacity: capacity, bedsTotal: bedsTotal);
-      }
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _busy = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _error = 'Could not save. Please try again.';
-        _busy = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xxl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _label('Name'),
-          RoostTextField(controller: _name, hint: '8-bed room'),
-          const SizedBox(height: RoostSpacing.md),
-          _label('Capacity (beds per physical room)'),
-          RoostTextField(controller: _capacity, hint: '8', keyboardType: TextInputType.number),
-          const SizedBox(height: RoostSpacing.md),
-          _label('Total beds of this type in the hostel'),
-          RoostTextField(controller: _bedsTotal, hint: '48', keyboardType: TextInputType.number),
-          if (_isEdit) ...[
-            const SizedBox(height: RoostSpacing.sm),
-            Text('Shrinking this fails if occupied beds would be removed.',
-                style: TextStyle(fontSize: 11.5, color: RoostColors.textTertiary)),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: RoostSpacing.md),
-            Text(_error!, style: TextStyle(fontSize: 12.5, color: RoostColors.negative)),
-          ],
-          const SizedBox(height: RoostSpacing.xl),
-          RoostButton(
-            label: _isEdit ? 'Save changes' : 'Create room type',
-            isLoading: _busy,
-            onPressed: _busy ? null : _submit,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _label(String t) => Padding(
-        padding: const EdgeInsets.only(bottom: RoostSpacing.sm, left: 2),
-        child: Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: RoostColors.textSecondary)),
-      );
 }

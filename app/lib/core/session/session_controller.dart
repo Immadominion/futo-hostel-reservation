@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/roost_api.dart';
@@ -9,8 +10,8 @@ import '../demo/hostel_data.dart';
 /// On a successful sign-in it **bootstraps** the app: fetches the hostels (and
 /// their room detail) into [HostelData] and the student's reservations into
 /// [reservationsProvider], so the rest of the app keeps reading synchronously.
-/// Every network step is non-fatal — if the backend is slow/asleep the app
-/// degrades to the built-in static data rather than failing to sign in.
+/// Live launches require this bootstrap to succeed; stale demo availability
+/// must never be displayed as if it came from the server.
 class SessionController extends Notifier<Student?> {
   @override
   Student? build() => null;
@@ -31,13 +32,28 @@ class SessionController extends Notifier<Student?> {
           ? await api.register(identifier, password)
           : await api.login(identifier, password);
       api.setToken(auth.token);
+      try {
+        await _bootstrap();
+      } on ApiException catch (e) {
+        _log('Bootstrap API error: ${e.statusCode} ${e.code} — ${e.message}');
+        api.setToken(null);
+        return 'Signed in, but could not load live hostel data: ${e.message}';
+      } catch (e) {
+        _log('Bootstrap connection error: $e');
+        api.setToken(null);
+        return 'Signed in, but could not load live hostel data. Check the API connection and try again.';
+      }
       await ref.read(tokenStoreProvider).save(auth.token);
       state = auth.student;
-      await _bootstrap();
+      _log('Live bootstrap completed successfully.');
       return null;
     } on ApiException catch (e) {
+      _log(
+        'Authentication API error: ${e.statusCode} ${e.code} — ${e.message}',
+      );
       return e.message;
-    } catch (_) {
+    } catch (e) {
+      _log('Authentication connection error: $e');
       return 'Could not reach the server. Check your connection and try again.';
     }
   }
@@ -54,12 +70,16 @@ class SessionController extends Notifier<Student?> {
     if (token == null || token.isEmpty) return false;
     final api = ref.read(roostApiProvider)..setToken(token);
     try {
-      state = await api.me();
+      final student = await api.me();
       await _bootstrap();
+      state = student;
+      _log('Stored session restored with live API data.');
       return true;
-    } catch (_) {
+    } catch (e) {
+      _log('Stored session bootstrap failed: $e');
       api.setToken(null);
       await ref.read(tokenStoreProvider).clear();
+      state = null;
       return false;
     }
   }
@@ -69,33 +89,38 @@ class SessionController extends Notifier<Student?> {
       final api = ref.read(roostApiProvider);
       try {
         await api.logout();
-      } catch (_) {/* best effort */}
+      } catch (_) {
+        /* best effort */
+      }
       api.setToken(null);
       await ref.read(tokenStoreProvider).clear();
     }
     state = null;
   }
 
-  /// Fill [HostelData] + [reservationsProvider] from the backend. Non-throwing:
-  /// any failed step leaves the existing (static) data in place.
+  /// Fill [HostelData] + [reservationsProvider] from the backend. Every request
+  /// must succeed so a partial or unavailable backend can never leave static
+  /// demo availability on screen.
   Future<void> _bootstrap() async {
     final api = ref.read(roostApiProvider);
-    try {
-      final list = await api.hostels();
-      final details = await Future.wait(list.map((h) async {
-        try {
-          return await api.hostel(h.id); // full detail: rooms + occupiedBeds + blurb
-        } catch (_) {
-          return h; // fall back to the list-level hostel (no rooms)
-        }
-      }));
-      HostelData.replaceHostels(details);
-    } catch (_) {/* keep static hostels */}
-    try {
-      ref.read(reservationsProvider.notifier).setAll(await api.reservations());
-    } catch (_) {/* keep empty */}
+    _log('Loading hostels from ${AppConfig.apiBaseUrl}...');
+    final list = await api.hostels();
+    _log('Loaded ${list.length} hostel summaries; loading room details...');
+    final details = await Future.wait(list.map((h) => api.hostel(h.id)));
+    final reservations = await api.reservations();
+
+    HostelData.replaceHostels(details);
+    ref.read(reservationsProvider.notifier).setAll(reservations);
+    _log(
+      'Loaded ${details.length} hostel details and ${reservations.length} reservations.',
+    );
+  }
+
+  void _log(String message) {
+    if (kDebugMode) debugPrint('[Roost] $message');
   }
 }
 
-final sessionProvider =
-    NotifierProvider<SessionController, Student?>(SessionController.new);
+final sessionProvider = NotifierProvider<SessionController, Student?>(
+  SessionController.new,
+);

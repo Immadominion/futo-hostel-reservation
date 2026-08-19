@@ -16,8 +16,9 @@ import '../../core/widgets/status_pill.dart';
 import '../../core/widgets/wavy_sheet.dart';
 import 'payment_webview_page.dart';
 
-/// Choose room + bed, then pay via Paystack (sandbox) and get the allocation
-/// receipt (FR7, FR8, FR9).
+/// Pick a room + bed, then pay via Paystack (sandbox) and get the allocation
+/// receipt (FR7, FR8, FR9). Every room in a hostel is the same size, so
+/// there's no separate "choose a room type" step — straight to real rooms.
 class ReservePage extends ConsumerStatefulWidget {
   const ReservePage({super.key, required this.hostelId});
   final String hostelId;
@@ -27,16 +28,13 @@ class ReservePage extends ConsumerStatefulWidget {
 }
 
 class _ReservePageState extends ConsumerState<ReservePage> {
-  int? _roomIdx;
-  int? _instanceIndex; // which physical room ("Room N") within the type
-  int? _localBed; // bed number *within* that room (1..capacity)
+  int? _roomIdx; // index into h.rooms
+  int? _bed; // local bed number (1..capacity)
   bool _paying = false;
 
   /// Reserve → open Paystack checkout in-app → poll for confirmation → receipt.
-  /// Demo mode skips straight to a synthesised paid booking. [globalBed] is
-  /// the room-type-wide bed number ((instanceIndex-1)*capacity + localBed) —
-  /// the only thing the server actually knows about.
-  Future<void> _pay(Hostel h, RoomType room, int globalBed) async {
+  /// Demo mode skips straight to a synthesised paid booking.
+  Future<void> _pay(Hostel h, Room room, int bed) async {
     setState(() => _paying = true);
     HapticFeedback.mediumImpact();
     try {
@@ -44,14 +42,14 @@ class _ReservePageState extends ConsumerState<ReservePage> {
         await Future.delayed(const Duration(milliseconds: 1600)); // mock gateway
         final res = ref
             .read(reservationsProvider.notifier)
-            .reserveDemo(hostel: h, room: room, bed: globalBed, fee: h.price);
+            .reserveDemo(hostel: h, room: room, bed: bed, fee: h.price);
         if (!mounted) return;
-        await _showReceipt(h, room, res);
+        await _showReceipt(h, res);
         return;
       }
 
       final api = ref.read(roostApiProvider);
-      final created = await api.createReservation(hostelId: h.id, roomId: room.id, bed: globalBed);
+      final created = await api.createReservation(hostelId: h.id, roomId: room.id, bed: bed);
       if (room.bedsAvailable > 0) room.bedsAvailable -= 1; // reflect the held bed locally
       ref.read(reservationsProvider.notifier).add(created.reservation);
       if (!mounted) return;
@@ -72,7 +70,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
         // if it somehow did go through despite the backout (callback
         // interception can miss it), keep the booking; otherwise release the
         // held bed instead of leaving it stuck with no path forward.
-        await _resolveUnconfirmedCheckout(created.reservation, h, room);
+        await _resolveUnconfirmedCheckout(created.reservation, h);
         return;
       }
 
@@ -87,7 +85,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
           res = created.reservation.copyWith(status: RoostStatus.paid);
         }
         ref.read(reservationsProvider.notifier).replace(res);
-        await _showReceipt(h, room, res);
+        await _showReceipt(h, res);
       } else if (status == 'failed') {
         ref.read(reservationsProvider.notifier).markCancelled(created.reservation.reference);
         _snack('Payment was not successful. The bed has been released — you can try again.');
@@ -109,7 +107,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
   /// releases the bed. Only a failure to even reach the server leaves the
   /// reservation untouched, since we don't want to cancel on an inconclusive
   /// check.
-  Future<void> _resolveUnconfirmedCheckout(Reservation reservation, Hostel h, RoomType room) async {
+  Future<void> _resolveUnconfirmedCheckout(Reservation reservation, Hostel h) async {
     final api = ref.read(roostApiProvider);
     try {
       final status = await api.paymentStatus(reservation.rrr);
@@ -122,7 +120,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
         }
         ref.read(reservationsProvider.notifier).replace(res);
         if (!mounted) return;
-        await _showReceipt(h, room, res);
+        await _showReceipt(h, res);
         return;
       }
       final cancelled = await api.cancelReservation(reservation.id);
@@ -159,11 +157,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _showReceipt(Hostel h, RoomType room, Reservation res) async {
-    // res.bed is the room-type-wide global number — convert back to the
-    // (Room N, local bed) shape the student actually picked, for display.
-    final instanceIndex = ((res.bed - 1) ~/ room.capacity) + 1;
-    final localBed = ((res.bed - 1) % room.capacity) + 1;
+  Future<void> _showReceipt(Hostel h, Reservation res) async {
     await showRoostWavySheet(
       context: context,
       dismissible: false,
@@ -184,9 +178,8 @@ class _ReservePageState extends ConsumerState<ReservePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _row('Hostel', h.name),
-            _row('Room type', res.roomName),
-            _row('Room', 'Room $instanceIndex'),
-            _row('Bed', 'Bed $localBed'),
+            _row('Room', 'Room ${res.roomIndex}'),
+            _row('Bed', 'Bed ${res.bed}'),
             _row('Reference', res.reference, mono: true),
             _row('Payment Reference', res.rrr, mono: true),
             _row('Amount paid', res.feeFull, strong: true),
@@ -253,10 +246,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
     ref.watch(brightnessProvider);
     final h = HostelData.byId(widget.hostelId);
     final room = _roomIdx == null ? null : h.rooms[_roomIdx!];
-    final globalBed = (room != null && _instanceIndex != null && _localBed != null)
-        ? (_instanceIndex! - 1) * room.capacity + _localBed!
-        : null;
-    final canPay = room != null && globalBed != null && !_paying;
+    final canPay = room != null && _bed != null && !_paying;
 
     return Scaffold(
       backgroundColor: RoostColors.surface0,
@@ -281,7 +271,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Reserve a bed', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: RoostColors.textPrimary)),
-                      Text(h.name, style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
+                      Text('${h.name} · ${h.roomSize}', style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
                     ],
                   ),
                 ],
@@ -292,61 +282,31 @@ class _ReservePageState extends ConsumerState<ReservePage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xl),
               children: [
-                _stepLabel('1', 'Choose a room'),
+                Text('Pick a room & bed', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
                 const SizedBox(height: RoostSpacing.md),
                 for (var i = 0; i < h.rooms.length; i++) ...[
-                  _RoomOption(
+                  _RoomSection(
                     room: h.rooms[i],
-                    selected: _roomIdx == i,
-                    onTap: h.rooms[i].bedsAvailable == 0
-                        ? null
-                        : () => setState(() {
-                              _roomIdx = i;
-                              _instanceIndex = null;
-                              _localBed = null;
-                            }),
-                  ),
-                  const SizedBox(height: RoostSpacing.md),
-                ],
-                if (room != null) ...[
-                  const SizedBox(height: RoostSpacing.sm),
-                  _stepLabel('2', 'Pick a room & bed'),
-                  const SizedBox(height: RoostSpacing.md),
-                  _RoomInstancesList(
-                    instances: room.displayInstances,
-                    selectedInstance: _instanceIndex,
-                    selectedBed: _localBed,
-                    onPick: (instanceIndex, bed) => setState(() {
-                      _instanceIndex = instanceIndex;
-                      _localBed = bed;
+                    selectedBed: _roomIdx == i ? _bed : null,
+                    onPick: (bed) => setState(() {
+                      _roomIdx = i;
+                      _bed = bed;
                     }),
                   ),
+                  const SizedBox(height: RoostSpacing.lg),
                 ],
-                const SizedBox(height: RoostSpacing.xl),
-                _FeeSummary(hostel: h, room: room, instanceIndex: _instanceIndex, localBed: _localBed),
+                const SizedBox(height: RoostSpacing.sm),
+                _FeeSummary(hostel: h, roomIndex: room?.index, bed: _bed),
               ],
             ),
           ),
-          _bottomBar(context, h, room, globalBed, canPay),
+          _bottomBar(context, h, room, _bed, canPay),
         ],
       ),
     );
   }
 
-  Widget _stepLabel(String n, String t) => Row(
-        children: [
-          Container(
-            width: 22, height: 22,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: RoostColors.accent, shape: BoxShape.circle),
-            child: Text(n, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: RoostColors.onAccent)),
-          ),
-          const SizedBox(width: RoostSpacing.sm),
-          Text(t, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
-        ],
-      );
-
-  Widget _bottomBar(BuildContext context, Hostel h, RoomType? room, int? globalBed, bool canPay) {
+  Widget _bottomBar(BuildContext context, Hostel h, Room? room, int? bed, bool canPay) {
     return Container(
       decoration: BoxDecoration(
         color: RoostColors.surface1,
@@ -360,7 +320,7 @@ class _ReservePageState extends ConsumerState<ReservePage> {
             label: _paying ? 'Processing…' : 'Pay ${h.priceFull}',
             icon: _paying ? null : PhosphorIcons.lockSimple(PhosphorIconsStyle.fill),
             isLoading: _paying,
-            onPressed: canPay ? () => _pay(h, room!, globalBed!) : null,
+            onPressed: canPay ? () => _pay(h, room!, bed!) : null,
           ),
         ),
       ),
@@ -368,109 +328,17 @@ class _ReservePageState extends ConsumerState<ReservePage> {
   }
 }
 
-class _RoomOption extends StatelessWidget {
-  const _RoomOption({required this.room, required this.selected, required this.onTap});
-  final RoomType room;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = room.bedsAvailable == 0;
-    final status = disabled
-        ? RoostStatus.full
-        : room.bedsAvailable <= 4
-            ? RoostStatus.limited
-            : RoostStatus.available;
-    return Opacity(
-      opacity: disabled ? 0.5 : 1,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(RoostSpacing.lg),
-          decoration: ShapeDecoration(
-            color: selected ? RoostColors.accentSubtle : RoostColors.surface1,
-            shadows: selected ? null : RoostShadows.card,
-            shape: SmoothRectangleBorder(
-              side: BorderSide(
-                color: selected ? RoostColors.accent : RoostColors.borderSubtle,
-                width: selected ? 1.4 : 0.5,
-              ),
-              borderRadius: const SmoothBorderRadius.all(SmoothRadius(cornerRadius: RoostRadius.lg, cornerSmoothing: 0.6)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                selected ? PhosphorIcons.checkCircle(PhosphorIconsStyle.fill) : PhosphorIcons.circle(),
-                size: 22, color: selected ? RoostColors.accent : RoostColors.textTertiary,
-              ),
-              const SizedBox(width: RoostSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(room.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
-                    const SizedBox(height: 2),
-                    Text('${room.capacity} per room  ·  ${room.bedsAvailable} beds open',
-                        style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
-                  ],
-                ),
-              ),
-              StatusPill(status),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One section per physical room ("Room 1", "Room 2", ...) with its own real
-/// occupancy — replaces a single generic capacity-sized grid, which couldn't
-/// represent a room type spanning many physical rooms (bedsTotal > capacity):
-/// it always showed the same low-numbered — usually already-full — beds,
-/// hiding real availability further down the pool.
-class _RoomInstancesList extends StatelessWidget {
-  const _RoomInstancesList({
-    required this.instances,
-    required this.selectedInstance,
-    required this.selectedBed,
-    required this.onPick,
-  });
-  final List<RoomInstance> instances;
-  final int? selectedInstance;
-  final int? selectedBed;
-  final void Function(int instanceIndex, int localBed) onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final instance in instances) ...[
-          _RoomInstanceSection(
-            instance: instance,
-            selectedBed: selectedInstance == instance.index ? selectedBed : null,
-            onPick: (bed) => onPick(instance.index, bed),
-          ),
-          const SizedBox(height: RoostSpacing.lg),
-        ],
-      ],
-    );
-  }
-}
-
-class _RoomInstanceSection extends StatelessWidget {
-  const _RoomInstanceSection({required this.instance, required this.selectedBed, required this.onPick});
-  final RoomInstance instance;
+/// One section per real physical room ("Room 1", "Room 2", ...) with its own
+/// real occupancy grid.
+class _RoomSection extends StatelessWidget {
+  const _RoomSection({required this.room, required this.selectedBed, required this.onPick});
+  final Room room;
   final int? selectedBed;
   final ValueChanged<int> onPick;
 
   @override
   Widget build(BuildContext context) {
-    final full = instance.bedsAvailable == 0;
+    final full = room.bedsAvailable == 0;
     return Opacity(
       opacity: full ? 0.5 : 1,
       child: Column(
@@ -478,11 +346,11 @@ class _RoomInstanceSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Room ${instance.index}',
+              Text('Room ${room.index}',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: RoostColors.textPrimary)),
               const SizedBox(width: 8),
               Text(
-                full ? 'Full' : '${instance.bedsAvailable} open',
+                full ? 'Full' : '${room.bedsAvailable} open',
                 style: TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w600,
                   color: full ? RoostColors.negative : RoostColors.textTertiary,
@@ -495,10 +363,10 @@ class _RoomInstanceSection extends StatelessWidget {
             spacing: RoostSpacing.md,
             runSpacing: RoostSpacing.md,
             children: [
-              for (var bed = 1; bed <= instance.bedsTotal; bed++)
+              for (var bed = 1; bed <= room.bedsTotal; bed++)
                 _BedTile(
                   bed: bed,
-                  taken: instance.isTaken(bed),
+                  taken: room.isTaken(bed),
                   selected: selectedBed == bed,
                   onTap: () => onPick(bed),
                 ),
@@ -554,11 +422,10 @@ class _BedTile extends StatelessWidget {
 }
 
 class _FeeSummary extends StatelessWidget {
-  const _FeeSummary({required this.hostel, required this.room, required this.instanceIndex, required this.localBed});
+  const _FeeSummary({required this.hostel, required this.roomIndex, required this.bed});
   final Hostel hostel;
-  final RoomType? room;
-  final int? instanceIndex;
-  final int? localBed;
+  final int? roomIndex;
+  final int? bed;
 
   @override
   Widget build(BuildContext context) {
@@ -567,9 +434,8 @@ class _FeeSummary extends StatelessWidget {
       child: Column(
         children: [
           _line('Hostel', hostel.name),
-          _line('Room type', room?.name ?? '—'),
-          _line('Room', instanceIndex == null ? '—' : 'Room $instanceIndex'),
-          _line('Bed', localBed == null ? '—' : 'Bed $localBed'),
+          _line('Room', roomIndex == null ? '—' : 'Room $roomIndex'),
+          _line('Bed', bed == null ? '—' : 'Bed $bed'),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: RoostSpacing.md),
             child: Divider(height: 1, color: RoostColors.borderSubtle),

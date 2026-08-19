@@ -168,7 +168,7 @@ class ReservationsPage extends ConsumerWidget {
               children: [
                 Center(child: StatusPill(current.status)),
                 const SizedBox(height: RoostSpacing.lg),
-                _row('Room', current.roomName),
+                _row('Room', 'Room ${current.roomIndex}'),
                 _row('Bed', 'Bed ${current.bed}'),
                 _row('Reference', current.reference, mono: true),
                 _row('Payment Reference', current.rrr, mono: true),
@@ -290,7 +290,7 @@ class _ReservationCard extends StatelessWidget {
               children: [
                 Text(h.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
                 const SizedBox(height: 2),
-                Text('${reservation.roomName}  ·  Bed ${reservation.bed}',
+                Text('Room ${reservation.roomIndex}  ·  Bed ${reservation.bed}',
                     style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
               ],
             ),

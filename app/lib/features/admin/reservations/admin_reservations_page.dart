@@ -6,7 +6,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/admin/admin_models.dart';
 import '../../../core/api/admin_api.dart';
 import '../../../core/api/roost_api.dart' show ApiException;
-import '../../../core/demo/hostel_data.dart' show Hostel, RoomType;
+import '../../../core/demo/hostel_data.dart' show Hostel, Room;
 import '../../../core/theme/brightness_provider.dart';
 import '../../../core/theme/squircle_button.dart';
 import '../../../core/theme/surface_card.dart';
@@ -191,10 +191,10 @@ class _AdminReservationsPageState extends ConsumerState<AdminReservationsPage> {
             const SizedBox(height: RoostSpacing.lg),
             _row('Student', r.studentDisplay),
             if (r.studentLevel != null) _row('Level', r.studentLevel!),
-            _row('Room', r.roomName.isEmpty ? '—' : r.roomName),
+            _row('Room', r.roomIndex > 0 ? 'Room ${r.roomIndex}' : '—'),
             _row('Bed', r.bed > 0 ? 'Bed ${r.bed}' : '—'),
             _row('Reference', r.reference, mono: true),
-            _row('Remita RRR', r.rrr, mono: true),
+            _row('Payment Reference', r.rrr, mono: true),
             _row('Amount', r.feeFull),
             _row('Date', r.dateDisplay),
             const SizedBox(height: RoostSpacing.xl),
@@ -329,8 +329,10 @@ class _ReservationCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text('$hostelName  ·  ${reservation.roomName.isEmpty ? "—" : reservation.roomName}',
-                        style: TextStyle(fontSize: 12.5, color: RoostColors.textTertiary)),
+                    Text(
+                      '$hostelName  ·  ${reservation.roomIndex > 0 ? "Room ${reservation.roomIndex}" : "—"}',
+                      style: TextStyle(fontSize: 12.5, color: RoostColors.textTertiary),
+                    ),
                   ],
                 ),
               ),
@@ -385,7 +387,7 @@ class _AllocateSheetContent extends ConsumerStatefulWidget {
 }
 
 class _AllocateSheetContentState extends ConsumerState<_AllocateSheetContent> {
-  List<RoomType> _rooms = [];
+  List<Room> _rooms = [];
   bool _loading = true;
   String? _error;
   int? _roomIdx;
@@ -480,7 +482,7 @@ class _AllocateSheetContentState extends ConsumerState<_AllocateSheetContent> {
             _BedGrid(
               capacity: room.bedsTotal,
               selected: _bed,
-              isTaken: (b) => room.occupiedGlobalBeds.contains(b),
+              isTaken: room.isTaken,
               onPick: (b) => setState(() => _bed = b),
             ),
           ],
@@ -498,7 +500,7 @@ class _AllocateSheetContentState extends ConsumerState<_AllocateSheetContent> {
 
 class _RoomOption extends StatelessWidget {
   const _RoomOption({required this.room, required this.selected, required this.onTap});
-  final RoomType room;
+  final Room room;
   final bool selected;
   final VoidCallback? onTap;
 
@@ -539,9 +541,9 @@ class _RoomOption extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(room.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+                    Text('Room ${room.index}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
                     const SizedBox(height: 2),
-                    Text('${room.capacity} per room  ·  ${room.bedsAvailable} beds open',
+                    Text('${room.bedsAvailable} of ${room.bedsTotal} beds open',
                         style: TextStyle(fontSize: 13, color: RoostColors.textTertiary)),
                   ],
                 ),

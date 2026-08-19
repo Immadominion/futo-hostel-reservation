@@ -236,7 +236,7 @@ class _HostelFormState extends ConsumerState<HostelForm> {
   late final _code = TextEditingController(text: widget.existing?.code ?? '');
   late final _funder = TextEditingController(text: widget.existing?.funder ?? 'School');
   late final _price = TextEditingController(text: widget.existing?.price.toString() ?? '');
-  late final _roomSize = TextEditingController(text: widget.existing?.roomSize ?? '');
+  late final _capacity = TextEditingController(text: widget.existing?.capacity.toString() ?? '');
   late final _blurb = TextEditingController(text: widget.existing?.blurb ?? '');
   late final _lat = TextEditingController(text: (widget.existing?.lat ?? 5.3865).toString());
   late final _lng = TextEditingController(text: (widget.existing?.lng ?? 7.0350).toString());
@@ -248,7 +248,7 @@ class _HostelFormState extends ConsumerState<HostelForm> {
 
   @override
   void dispose() {
-    for (final c in [_id, _name, _code, _funder, _price, _roomSize, _blurb, _lat, _lng]) {
+    for (final c in [_id, _name, _code, _funder, _price, _capacity, _blurb, _lat, _lng]) {
       c.dispose();
     }
     super.dispose();
@@ -274,6 +274,11 @@ class _HostelFormState extends ConsumerState<HostelForm> {
       setState(() => _error = 'Enter valid coordinates.');
       return;
     }
+    final capacity = int.tryParse(_capacity.text.trim());
+    if (!_isEdit && (capacity == null || capacity < 1)) {
+      setState(() => _error = 'Enter a valid capacity.');
+      return;
+    }
 
     setState(() {
       _error = null;
@@ -282,16 +287,16 @@ class _HostelFormState extends ConsumerState<HostelForm> {
     try {
       final api = ref.read(adminApiProvider);
       if (_isEdit) {
+        // capacity is fixed once a hostel has rooms — never sent on edit.
         await api.updateHostel(widget.existing!.id, {
           'name': name, 'code': code, 'funder': _funder.text.trim(), 'gender': _genderStr(_gender),
-          'price': price, 'roomSize': _roomSize.text.trim(), 'blurb': _blurb.text.trim(),
-          'lat': lat, 'lng': lng,
+          'price': price, 'blurb': _blurb.text.trim(), 'lat': lat, 'lng': lng,
         });
       } else {
         final preset = _kCoverPresets[id.hashCode.abs() % _kCoverPresets.length];
         await api.createHostel(
           id: id, name: name, code: code, funder: _funder.text.trim(), gender: _gender,
-          price: price, roomSize: _roomSize.text.trim(), blurb: _blurb.text.trim(),
+          price: price, capacity: capacity!, blurb: _blurb.text.trim(),
           lat: lat, lng: lng, coverA: preset.$1, coverB: preset.$2,
         );
       }
@@ -345,9 +350,11 @@ class _HostelFormState extends ConsumerState<HostelForm> {
             _label('Price (₦ per session)'),
             RoostTextField(controller: _price, hint: '42000', keyboardType: TextInputType.number),
             const SizedBox(height: RoostSpacing.md),
-            _label('Room size (display text)'),
-            RoostTextField(controller: _roomSize, hint: '8–10 per room'),
-            const SizedBox(height: RoostSpacing.md),
+            if (!_isEdit) ...[
+              _label('Capacity (beds per room — fixed once rooms exist)'),
+              RoostTextField(controller: _capacity, hint: '8', keyboardType: TextInputType.number),
+              const SizedBox(height: RoostSpacing.md),
+            ],
             _label('Blurb'),
             RoostTextField(controller: _blurb, hint: 'A short description of the block'),
             const SizedBox(height: RoostSpacing.md),
