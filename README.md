@@ -32,27 +32,56 @@ ported from our in-house Flutter design system; the web pages mirror its tokens 
 
 ## Run it
 
-### 📱 Mobile app (Flutter)
+### 📱 Run the student app
+
 ```bash
 cd app
-flutter pub get                                  # pulls http + flutter_secure_storage
-flutter run                                       # LIVE: talks to the deployed backend (default)
-flutter run --dart-define=USE_DEMO_DATA=true      # OFFLINE: built-in demo data, no network
-# or, in a browser:
-flutter run -d chrome
+flutter pub get
+flutter run
+# explicitly select the student entry point:
+flutter run -t lib/main.dart
 ```
-- **Live mode (default):** the app signs in against the API, then loads hostels,
-  rooms and your reservations from the backend, and does a real reserve → pay →
-  allocation. The first request can take ~50s if the free-tier server is asleep.
-- **Demo mode** (`USE_DEMO_DATA=true`): runs entirely offline on the static data
-  in `app/lib/core/demo/hostel_data.dart` — use it for a guaranteed demo.
+- The student app is **API-only**. Sign-in, hostel availability, reservations and
+  payments always come from the backend; it does not fall back to sample hostel
+  data when the API is unavailable.
+- The first request can take about 50 seconds if the Render service is asleep.
 - **Login:** register or sign in with a reg number like `20211234567` (or a school
   email `name.surname.regno@futo.edu.ng`) + a password that is **8+ chars with a
   letter and a number** (e.g. `futo2026`). After the first sign-in, **Face ID /
   fingerprint** unlocks the saved session.
 
-### 🌐 Landing page & admin (no build step)
-Open `landing/index.html` and `admin/index.html` directly, **or** serve the folder:
+### Build the student APK
+
+Install Android Studio and its Android SDK first. Then:
+
+```bash
+cd app
+flutter pub get
+flutter build apk --release
+```
+
+The installable APK is written to
+`app/build/app/outputs/flutter-apk/app-release.apk`. This project currently uses
+debug-key signing for release builds, which is suitable for testing on devices;
+configure a private upload key before publishing to Google Play.
+
+### 🛠 Optional admin app
+
+The Flutter student app is the primary deliverable. An admin app is also
+available for hostel staff, but it is optional to build and test:
+
+```bash
+cd app
+flutter run -t lib/main_admin.dart
+# or build its separate APK:
+flutter build apk --release -t lib/main_admin.dart
+```
+
+The repository also contains a lightweight web admin dashboard in `admin/`.
+Both admin clients require an admin account on the backend.
+
+### 🌐 Landing page and web admin (no build step)
+Open `landing/index.html` or `admin/index.html` directly, **or** serve the folder:
 ```bash
 python3 -m http.server 8765      # from this directory
 # landing → http://localhost:8765/landing/
@@ -76,10 +105,9 @@ Edit the `CONFIG` block at the top of `landing/script.js`:
   wired (and how to point at a different backend) is in
   [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
 - **Admin dashboard:** open `admin/index.html`, sign in with an admin account, and
-  it shows live occupancy, reservations and hostels. Append `?demo=1` to the URL to
-  run it fully offline on sample data.
+  it shows live occupancy, reservations and hostels.
 - Heads-up: the backend is on Render's free tier — after ~15 min idle it sleeps and
-  the next request cold-starts (~50s). Use demo mode for a guaranteed-instant demo.
+  the next request cold-starts (~50s).
 
 ## Maps & imagery
 - The landing embeds a **live Google Map** of FUTO and every hostel card links to
@@ -89,9 +117,9 @@ Edit the `CONFIG` block at the top of `landing/script.js`:
   photo instead, drop `app/assets/hostels/<id>.jpg` (and set a `background-image`
   on `.hcard-cover` in the landing) — the layout already accommodates it.
 
-## The hostels (demo)
+## The hostel catalogue
 Hostels **A–E**, **TETFund**, **NDDC**, **PG** — real blocks. Gender / room size /
-fee are representative demo values (FUTO doesn't publish an authoritative table,
+fee are representative seed values (FUTO doesn't publish an authoritative table,
 and the few published fees conflict). See **REQUIREMENTS.md §4 & §9** for the
 sourcing and corrections (e.g. NDDC is mixed‑gender; "PG" = postgraduate).
 
@@ -103,4 +131,4 @@ sourcing and corrections (e.g. NDDC is mixed‑gender; "PG" = postgraduate).
 | FR7 Reserve a bed (live availability) | `app/lib/features/reserve`, `core/demo/hostel_data.dart` |
 | FR8–9 Pay (mock Remita) + receipt/RRR | `app/lib/features/reserve` |
 | FR10 View / cancel / history | `app/lib/features/reservations` |
-| FR11–13 Manage hostels, reservations, allocation, occupancy | `admin/` |
+| FR11–13 Manage hostels, reservations, allocation, occupancy | `app/lib/features/admin/`, `admin/` |
