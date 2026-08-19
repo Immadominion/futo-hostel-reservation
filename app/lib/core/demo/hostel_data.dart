@@ -468,6 +468,50 @@ class HostelData {
     hostels = list;
   }
 
+  /// Keep the in-memory map aligned with a reservation created by the API.
+  /// The API may assign a different free bed than the student's preference, so
+  /// callers must pass the reservation's returned bed number.
+  static void markBedHeld({
+    required String hostelId,
+    required String roomId,
+    required int bed,
+  }) {
+    final room = _room(hostelId: hostelId, roomId: roomId);
+    if (room == null) return;
+    if (!room.occupiedBeds.contains(bed)) {
+      room.occupiedBeds.add(bed);
+      room.occupiedBeds.sort();
+    }
+    _syncAvailability(room);
+  }
+
+  /// Restore a bed only after the server confirms the reservation is cancelled.
+  static void markBedReleased({
+    required String hostelId,
+    required String roomId,
+    required int bed,
+  }) {
+    final room = _room(hostelId: hostelId, roomId: roomId);
+    if (room == null) return;
+    room.occupiedBeds.remove(bed);
+    _syncAvailability(room);
+  }
+
+  static Room? _room({required String hostelId, required String roomId}) {
+    final hostel = byIdOrNull(hostelId);
+    if (hostel == null) return null;
+    for (final room in hostel.rooms) {
+      if (room.id == roomId) return room;
+    }
+    return null;
+  }
+
+  static void _syncAvailability(Room room) {
+    room.bedsAvailable = (room.bedsTotal - room.occupiedBeds.length)
+        .clamp(0, room.bedsTotal)
+        .toInt();
+  }
+
   static Hostel? byIdOrNull(String id) {
     for (final h in hostels) {
       if (h.id == id) return h;
@@ -553,14 +597,13 @@ class ReservationsController extends Notifier<List<Reservation>> {
   ];
 
   /// Demo-mode reserve: synthesise a paid booking in memory (no backend).
-  /// Decrements live availability and records the booking.
   Reservation reserveDemo({
     required Hostel hostel,
     required Room room,
     required int bed,
     required int fee,
   }) {
-    if (room.bedsAvailable > 0) room.bedsAvailable -= 1;
+    HostelData.markBedHeld(hostelId: hostel.id, roomId: room.id, bed: bed);
     final stamp = DateTime.now();
     final res = Reservation(
       reference:
