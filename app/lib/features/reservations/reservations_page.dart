@@ -89,53 +89,120 @@ class ReservationsPage extends ConsumerWidget {
         ),
       );
 
-  Future<void> _showSheet(BuildContext context, WidgetRef ref, Reservation r) async {
-    final h = HostelData.byId(r.hostelId);
-    final paid = r.status == RoostStatus.paid;
+  Future<void> _showSheet(BuildContext context, WidgetRef ref, Reservation initial) async {
+    final h = HostelData.byId(initial.hostelId);
     await showRoostWavySheet(
       context: context,
-      headerGradient: paid ? RoostGradients.accentHeader : RoostGradients.graphiteHeader,
-      headerForeground: paid ? RoostColors.onAccent : RoostColors.textPrimary,
+      headerGradient: initial.status == RoostStatus.paid ? RoostGradients.accentHeader : RoostGradients.graphiteHeader,
+      headerForeground: initial.status == RoostStatus.paid ? RoostColors.onAccent : RoostColors.textPrimary,
       headerHeight: 150,
       header: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(paid ? PhosphorIcons.sealCheck(PhosphorIconsStyle.fill) : PhosphorIcons.clockCounterClockwise(),
-              size: 34, color: paid ? RoostColors.onAccent : RoostColors.textPrimary),
+          Icon(
+            initial.status == RoostStatus.paid
+                ? PhosphorIcons.sealCheck(PhosphorIconsStyle.fill)
+                : PhosphorIcons.clockCounterClockwise(),
+            size: 34,
+            color: initial.status == RoostStatus.paid ? RoostColors.onAccent : RoostColors.textPrimary,
+          ),
           const SizedBox(height: RoostSpacing.sm),
           Text(h.name,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: paid ? RoostColors.onAccent : RoostColors.textPrimary)),
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: initial.status == RoostStatus.paid ? RoostColors.onAccent : RoostColors.textPrimary)),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(child: StatusPill(r.status)),
-            const SizedBox(height: RoostSpacing.lg),
-            _row('Room', r.roomName),
-            _row('Bed', 'Bed ${r.bed}'),
-            _row('Reference', r.reference, mono: true),
-            _row('Remita RRR', r.rrr, mono: true),
-            _row('Amount', r.feeFull),
-            _row('Date', r.date),
-            const SizedBox(height: RoostSpacing.xl),
-            if (paid)
-              RoostButton(
-                label: 'Cancel reservation',
-                variant: RoostButtonVariant.destructive,
-                onPressed: () => _cancel(context, ref, r),
-              )
-            else
-              RoostButton(
-                label: 'Close',
-                variant: RoostButtonVariant.secondary,
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-          ],
-        ),
+      child: StatefulBuilder(
+        builder: (context, setSheetState) {
+          var current = initial;
+          var checking = false;
+
+          Future<void> checkStatus() async {
+            setSheetState(() => checking = true);
+            final messenger = ScaffoldMessenger.of(context);
+            final api = ref.read(roostApiProvider);
+            try {
+              final status = await api.paymentStatus(current.rrr);
+              if (status == 'paid') {
+                Reservation updated;
+                try {
+                  updated = await api.reservation(current.id);
+                } catch (_) {
+                  updated = current.copyWith(status: RoostStatus.paid);
+                }
+                ref.read(reservationsProvider.notifier).replace(updated);
+                setSheetState(() => current = updated);
+                messenger.showSnackBar(const SnackBar(content: Text('Payment confirmed — bed allocated!')));
+              } else {
+                // Not paid. Paystack's hosted-checkout verify has no real
+                // "still in progress" signal — an untouched link and a truly
+                // abandoned one report identically — so a manual check that
+                // isn't a success is treated as decisive: release the bed
+                // rather than leave it held with no path forward.
+                final cancelled = await api.cancelReservation(current.id);
+                ref.read(reservationsProvider.notifier).replace(cancelled);
+                setSheetState(() => current = cancelled);
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Payment not completed — the reservation has been released.')),
+                );
+              }
+            } on ApiException catch (e) {
+              messenger.showSnackBar(SnackBar(content: Text(e.message)));
+            } catch (_) {
+              messenger.showSnackBar(const SnackBar(content: Text('Could not check status. Please try again.')));
+            } finally {
+              setSheetState(() => checking = false);
+            }
+          }
+
+          final paid = current.status == RoostStatus.paid;
+          final pending = current.status == RoostStatus.pending || current.status == RoostStatus.reserved;
+
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(RoostSpacing.xl, RoostSpacing.lg, RoostSpacing.xl, RoostSpacing.xxl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: StatusPill(current.status)),
+                const SizedBox(height: RoostSpacing.lg),
+                _row('Room', current.roomName),
+                _row('Bed', 'Bed ${current.bed}'),
+                _row('Reference', current.reference, mono: true),
+                _row('Payment Reference', current.rrr, mono: true),
+                _row('Amount', current.feeFull),
+                _row('Date', current.date),
+                const SizedBox(height: RoostSpacing.xl),
+                if (paid)
+                  RoostButton(
+                    label: 'Cancel reservation',
+                    variant: RoostButtonVariant.destructive,
+                    onPressed: () => _cancel(context, ref, current),
+                  )
+                else if (pending) ...[
+                  RoostButton(
+                    label: checking ? 'Checking…' : 'Check payment status',
+                    isLoading: checking,
+                    onPressed: checking ? null : checkStatus,
+                  ),
+                  const SizedBox(height: RoostSpacing.md),
+                  RoostButton(
+                    label: 'Close',
+                    variant: RoostButtonVariant.secondary,
+                    onPressed: checking ? null : () => Navigator.of(context).pop(),
+                  ),
+                ] else
+                  RoostButton(
+                    label: 'Close',
+                    variant: RoostButtonVariant.secondary,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

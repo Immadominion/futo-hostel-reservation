@@ -26,6 +26,14 @@ class AuthResult {
   final Student student;
 }
 
+/// Result of POST /reservations — the held reservation plus where to send the
+/// student to actually pay for it (Paystack's hosted checkout, sandbox mode).
+class ReservationCreateResult {
+  ReservationCreateResult(this.reservation, this.authorizationUrl);
+  final Reservation reservation;
+  final String authorizationUrl;
+}
+
 /// The single client for the Roost REST API (base path `/api/v1`).
 ///
 /// Holds the bearer token in memory for the app session; persistence across
@@ -134,14 +142,16 @@ class RoostApi {
   }
 
   // ---- reservations ----
-  Future<Reservation> createReservation({
+  Future<ReservationCreateResult> createReservation({
     required String hostelId,
     required String roomId,
     required int bed,
   }) async {
     final j = await _post('/reservations',
         {'hostelId': hostelId, 'roomId': roomId, 'bed': bed}) as Map<String, dynamic>;
-    return Reservation.fromJson(j['reservation'] as Map<String, dynamic>);
+    final reservation = Reservation.fromJson(j['reservation'] as Map<String, dynamic>);
+    final authorizationUrl = (j['payment'] as Map<String, dynamic>)['authorizationUrl'] as String;
+    return ReservationCreateResult(reservation, authorizationUrl);
   }
 
   Future<List<Reservation>> reservations() async {
@@ -159,14 +169,19 @@ class RoostApi {
     return Reservation.fromJson(j);
   }
 
-  // ---- payments (demo uses /simulate to confirm without a real Remita webhook) ----
-  Future<void> simulatePayment(String rrr, {bool success = true}) async =>
-      _post('/payments/$rrr/simulate', {'outcome': success ? 'success' : 'failed'});
+  // ---- payments (Paystack, sandbox — real checkout via PaymentWebViewPage) ----
 
+  /// Poll after checkout closes. No webhook — the server checks Paystack's
+  /// verify endpoint live when this is called.
   Future<String> paymentStatus(String rrr) async {
     final j = await _get('/payments/$rrr/status') as Map<String, dynamic>;
     return (j['status'] ?? 'pending').toString();
   }
+
+  /// Offline fallback that bypasses Paystack entirely — not used by the normal
+  /// checkout flow, kept for demoing without depending on Paystack being reachable.
+  Future<void> simulatePayment(String rrr, {bool success = true}) async =>
+      _post('/payments/$rrr/simulate', {'outcome': success ? 'success' : 'failed'});
 }
 
 /// Persists the JWT across app restarts (Keychain on iOS, EncryptedSharedPrefs

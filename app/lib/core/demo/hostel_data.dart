@@ -55,9 +55,34 @@ String _fmtIso(String? iso) {
   return d == null ? iso : _fmtDate(d.toLocal());
 }
 
+/// A single physical room within a room type — e.g. NDDC's "4-bed room" type
+/// has 16 of these (bedsTotal 64 / capacity 4). [index] is a synthetic label
+/// ("Room 1", "Room 2", ...), not a real FUTO room number. [occupiedBeds] are
+/// LOCAL bed numbers (1..bedsTotal) taken within *this* room only.
+class RoomInstance {
+  const RoomInstance(this.index, this.bedsTotal, this.occupiedBeds);
+
+  final int index;
+  final int bedsTotal;
+  final List<int> occupiedBeds;
+
+  bool isTaken(int localBed) => occupiedBeds.contains(localBed);
+  int get bedsAvailable => bedsTotal - occupiedBeds.length;
+
+  factory RoomInstance.fromJson(Map<String, dynamic> j) => RoomInstance(
+        (j['index'] as num?)?.toInt() ?? 1,
+        (j['bedsTotal'] as num?)?.toInt() ?? 0,
+        ((j['occupiedBeds'] as List?) ?? const [])
+            .map((e) => int.tryParse(e.toString()) ?? -1)
+            .where((n) => n > 0)
+            .toList(),
+      );
+}
+
 /// A room *type* within a hostel. [bedsAvailable] is mutable so reserving a bed
 /// decrements live availability (FR7) for the rest of the session. [id] and
-/// [occupiedBeds] are populated in live mode (empty for static demo data).
+/// [instances] are populated in live mode (empty for static demo data — see
+/// [RoomType.demoInstances]).
 class RoomType {
   RoomType(
     this.name,
@@ -65,15 +90,32 @@ class RoomType {
     this.bedsAvailable,
     this.bedsTotal, {
     this.id = '',
-    List<int>? occupiedBeds,
-  }) : occupiedBeds = occupiedBeds ?? const [];
+    List<RoomInstance>? instances,
+  }) : instances = instances ?? const [];
 
   final String id;
   final String name;
   final int capacity;
   int bedsAvailable;
   final int bedsTotal;
-  final List<int> occupiedBeds; // bed numbers already taken (server-supplied)
+  final List<RoomInstance> instances; // server-supplied; empty in demo mode
+
+  /// Demo mode has no real per-room data — fake a single plausible room so the
+  /// picker still has something to render (a stable heuristic, not real state).
+  List<RoomInstance> get displayInstances {
+    if (instances.isNotEmpty) return instances;
+    final openBeds = bedsAvailable == 0 ? 0 : (capacity <= 4 ? 2 : 3);
+    final occupied = [for (var b = 1; b <= capacity - openBeds; b++) b];
+    return [RoomInstance(1, capacity, occupied)];
+  }
+
+  /// Flattened back to room-type-wide numbers — for admin's manual allocate
+  /// picker, which (deliberately) shows every bed in the type at once rather
+  /// than grouping by physical room.
+  List<int> get occupiedGlobalBeds => [
+        for (final instance in displayInstances)
+          for (final local in instance.occupiedBeds) (instance.index - 1) * capacity + local,
+      ];
 
   factory RoomType.fromJson(Map<String, dynamic> j) => RoomType(
         (j['name'] ?? '').toString(),
@@ -81,9 +123,8 @@ class RoomType {
         (j['bedsAvailable'] as num?)?.toInt() ?? 0,
         (j['bedsTotal'] as num?)?.toInt() ?? 0,
         id: (j['id'] ?? '').toString(),
-        occupiedBeds: ((j['occupiedBeds'] as List?) ?? const [])
-            .map((e) => int.tryParse(e.toString()) ?? -1)
-            .where((n) => n > 0)
+        instances: ((j['instances'] as List?) ?? const [])
+            .map((e) => RoomInstance.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
 }
