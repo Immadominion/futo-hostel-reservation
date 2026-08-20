@@ -68,7 +68,7 @@ configure a private upload key before publishing to Google Play.
 ### 🛠 Optional admin app
 
 The Flutter student app is the primary deliverable. An admin app is also
-available for hostel staff, but it is optional to build and test:
+available for hostel staff, but thi is optional to build and test:
 
 ```bash
 cd app
